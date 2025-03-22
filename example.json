@@ -1,0 +1,16 @@
+[
+  {
+    "name": "table_name",
+    "columns": [
+      {
+        "name": "column_name1"
+      },
+      {
+        "name": "column_name2"
+      },
+      {
+        "name": "column_name3"
+      }
+    ]
+  }
+]

@@ -20,14 +20,12 @@ class OrmColumn(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(50), nullable=False)
-    type = Column(String(50), nullable=False)
     table_id = Column(Integer, ForeignKey('orm_tables.id'), nullable=False)
     table = relationship('OrmTable', back_populates='columns')
 
 if __name__ == '__main__':
     from connection import Connection
     conn = Connection()
-
     Base.metadata.create_all(
         bind=conn.engine,
     )

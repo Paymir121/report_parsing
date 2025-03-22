@@ -5,7 +5,7 @@ import sys
 
 def run():
     app: QApplication = QApplication(sys.argv)
-    window: MainWindow = MainWindow(ui_file_name="logger.ui")
+    window: MainWindow = MainWindow(ui_file_name="main_window.ui")
     sys.exit(app.exec())
 
 
