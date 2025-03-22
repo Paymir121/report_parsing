@@ -1,0 +1,16 @@
+alembic>=1.13.1
+# packaging>=23.2 # Дублируется в другом пакете и возникает конфликт версий. Необходимо проверить его необходимость
+pg8000>=1.30.2
+psycopg2>=2.9.9 # Если запускается на Windows
+# psycopg2-binary>=2.9.9 # Если запускается на MacOS
+PySide6>=6.6.2
+PySide6_Addons>=6.6.2
+PySide6_Essentials>=6.6.2
+python-dateutil>=2.8.2
+scramp>=1.4.4
+shiboken6>=6.6.2
+
+SQLAlchemy>=2.0.23
+sqlalchemy-json>=0.7.0
+isort
+black
