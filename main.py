@@ -4,6 +4,7 @@ from main_window import MainWindow
 import sys
 
 def run():
+    loader: QUiLoader = QUiLoader()
     app: QApplication = QApplication(sys.argv)
     window: MainWindow = MainWindow(ui_file_name="main_window.ui")
     sys.exit(app.exec())
