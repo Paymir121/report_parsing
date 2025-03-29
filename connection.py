@@ -1,13 +1,11 @@
-from sqlalchemy import create_engine, Inspector, inspect
+from sqlalchemy import URL, Inspector, create_engine, inspect
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.engine import Engine
 
-from sqlalchemy import URL
-
+from logger import py_logger
 from orm_models import Base
 from settings import DATABASES
-from logger import py_logger
 
 
 class Connection:
@@ -20,7 +18,6 @@ class Connection:
         if cls._instance is None:
             cls._instance = super(Connection, cls).__new__(cls)
         return cls._instance
-
 
     def __init__(
         self,
@@ -54,9 +51,10 @@ class Connection:
             self.connected = True
             py_logger.info(f"Подключение к базе данных прошло успешно")
         except SQLAlchemyError as err:
-            py_logger.error(f"Не удалось подключиться к базе данных {err}, {err.__cause__}")
+            py_logger.error(
+                f"Не удалось подключиться к базе данных {err}, {err.__cause__}"
+            )
             if self.connection:
                 self.connection.invalidate()
                 self.connection.close()
             self.engine.dispose()
-

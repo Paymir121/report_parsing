@@ -1,18 +1,25 @@
 import sys
 
-
+import pandas as pd
+from pandas import DataFrame
 from PySide6.QtCore import QFile, Qt
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtWidgets import QMainWindow, QWidget, QTableWidgetItem, QFileDialog, QTableWidget, QPushButton, QComboBox, \
-    QLineEdit
-from pandas import DataFrame
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFileDialog,
+    QLineEdit,
+    QMainWindow,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QWidget,
+)
 
-from connection import Connection
-import pandas as pd
-from orm_models import  ORMTableModel, ORMTableColumnModel
-from data_models import  TableModel, TableColumnModel
 import settings as st
+from connection import Connection
+from data_models import TableColumnModel, TableModel
 from logger import py_logger
+from orm_models import ORMTableColumnModel, ORMTableModel
 
 
 class MainWindow(QMainWindow):
@@ -84,15 +91,18 @@ class MainWindow(QMainWindow):
         self.records_table.setHorizontalHeaderLabels([])
         self.records_table.clearContents()
 
-
     def open_file_dialog(self):
         options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(self, "Выберите файл", "", "All Files (*);;Text Files (*.txt)", options=options)
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Выберите файл",
+            "",
+            "All Files (*);;Text Files (*.txt)",
+            options=options,
+        )
         py_logger.info(f"5: open_file_dialog file_name=", file_path)
         self.chose_file = pd.read_excel(file_path)
         self.add_export_column_name()
-
-
 
     def add_orm_column_name(self) -> None:
         py_logger.info(f"6: add_orm_column_name")
@@ -116,9 +126,9 @@ class MainWindow(QMainWindow):
                 self.data_table.setCellWidget(row_index, 1, combo_box)
                 self.data_table.setCellWidget(row_index, 2, modification_line_edit)
 
-            orm_column_name_item.setFlags(orm_column_name_item.flags() & ~Qt.ItemIsEditable)
-
-
+            orm_column_name_item.setFlags(
+                orm_column_name_item.flags() & ~Qt.ItemIsEditable
+            )
 
     def create_combo_box_with_exel_columns(self) -> QComboBox:
         combo_box = QComboBox()
@@ -150,9 +160,9 @@ class MainWindow(QMainWindow):
             relationship_column: dict = {
                 "column_name_in_orm": column_name_in_orm,
                 "column_name_in_file": column_name_in_file,
-                "modification_data": modification_data
+                "modification_data": modification_data,
             }
-            relationships_column_name.append( relationship_column )
+            relationships_column_name.append(relationship_column)
         py_logger.info(f"11: relationship_column_name={relationships_column_name}")
         self.export_data_to_db(relationships_column_name)
 
@@ -163,7 +173,9 @@ class MainWindow(QMainWindow):
                 break  # Выйти из цикла, если встретилась пустая строка
             data: dict = {}
             for relationship in relationships_column_name:
-                column_in_orm = self.chose_table.get_column_by_rus_name(relationship["column_name_in_orm"]).orm_column_name
+                column_in_orm = self.chose_table.get_column_by_rus_name(
+                    relationship["column_name_in_orm"]
+                ).orm_column_name
 
                 column_in_file = relationship["column_name_in_file"]
                 if column_in_file == st.AUX.NOT_CHOOSED_ITEM:

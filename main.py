@@ -1,10 +1,13 @@
+import sys
+
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import QApplication
-from main_window import MainWindow
-import sys
-from orm_models import create_table_in_db
+
 from file_db_example import fill_example_tables_in_db
 from logger import py_logger
+from main_window import MainWindow
+from orm_models import create_table_in_db
+
 
 def run():
     loader: QUiLoader = QUiLoader()
@@ -13,7 +16,7 @@ def run():
     sys.exit(app.exec())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     py_logger.info("Start program")
     try:
         create_table_in_db()
