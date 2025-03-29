@@ -4,10 +4,11 @@ from sqlalchemy import delete
 
 from connection import Connection
 if __name__ == '__main__':
-    from orm_models import ORMTableModel, ORMTableColumnModel
+    from orm_models import ORMTableModel, ORMTableColumnModel, Base
     connection = Connection()
-    connection.session.execute(delete(ORMTableModel))
-    connection.session.execute(delete(ORMTableColumnModel))
+    Base.metadata.create_all(
+        bind=connection.engine,
+    )
 
     with open('example.json', 'r', encoding='utf-8') as file:
         data = json.load(file)

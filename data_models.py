@@ -42,11 +42,11 @@ class TableModel:
         for column in self.columns:
             print(f"type of column={column.type_column}")
             if column.type_column == "integer":
-                attributes[column.orm_column_name] = Column(Integer, nullable=False)
+                attributes[column.orm_column_name] = Column(Integer, nullable=True)
             elif column.type_column == "Pinteger":
                 attributes[column.orm_column_name] = Column(Integer, primary_key=True, autoincrement=True)
             else:
-                attributes[column.orm_column_name] = Column(String(50), nullable=False)
+                attributes[column.orm_column_name] = Column(String(50), nullable=True)
         table_args: list = []
         attributes['__table_args__'] = tuple(table_args) + ({'extend_existing': True},)
         print(f"attributes={attributes}")

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>634</width>
-    <height>438</height>
+    <width>1405</width>
+    <height>776</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,10 +17,10 @@
    <widget class="QFrame" name="frame">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>10</y>
-      <width>521</width>
-      <height>321</height>
+      <x>0</x>
+      <y>0</y>
+      <width>1371</width>
+      <height>1021</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -34,8 +34,8 @@
       <rect>
        <x>20</x>
        <y>60</y>
-       <width>481</width>
-       <height>192</height>
+       <width>411</width>
+       <height>631</height>
       </rect>
      </property>
      <column>
@@ -54,41 +54,50 @@
       </property>
      </column>
     </widget>
-    <widget class="QPushButton" name="add_file_pushbutton">
+    <widget class="QPushButton" name="export_pushbutton">
+     <property name="geometry">
+      <rect>
+       <x>250</x>
+       <y>700</y>
+       <width>171</width>
+       <height>28</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Добавить запис в БД</string>
+     </property>
+    </widget>
+    <widget class="QTableWidget" name="records_table">
+     <property name="geometry">
+      <rect>
+       <x>450</x>
+       <y>20</y>
+       <width>921</width>
+       <height>701</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QWidget" name="horizontalLayoutWidget">
      <property name="geometry">
       <rect>
        <x>10</x>
        <y>20</y>
-       <width>93</width>
-       <height>28</height>
+       <width>421</width>
+       <height>41</height>
       </rect>
      </property>
-     <property name="text">
-      <string>PushButton</string>
-     </property>
-    </widget>
-    <widget class="QComboBox" name="tables_combobox">
-     <property name="geometry">
-      <rect>
-       <x>120</x>
-       <y>30</y>
-       <width>141</width>
-       <height>22</height>
-      </rect>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="export_pushbutton">
-     <property name="geometry">
-      <rect>
-       <x>150</x>
-       <y>280</y>
-       <width>93</width>
-       <height>28</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>PushButton</string>
-     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QPushButton" name="add_file_pushbutton">
+        <property name="text">
+         <string>Выбратиь файл excel</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QComboBox" name="tables_combobox"/>
+      </item>
+     </layout>
     </widget>
    </widget>
   </widget>
@@ -97,7 +106,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>634</width>
+     <width>1405</width>
      <height>26</height>
     </rect>
    </property>

@@ -7,14 +7,6 @@ from sqlalchemy.orm import relationship
 
 Base = declarative_base()
 
-# class ORMExampleModel(Base):
-#     __tablename__ = 'example_table'
-#
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     column_example1 = Column(String(50), nullable=False)
-#     column_example2 = Column(String(50), nullable=False)
-#     column_example3 = Column(String(50), nullable=True)
-
 class ORMTableModel(Base):
     __tablename__ = 'tables'
     id = Column(Integer, primary_key=True, autoincrement=True)

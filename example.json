@@ -39,6 +39,37 @@
           "name": "content",
           "rus_name": "Содержание",
           "type": "string"
+        },
+        {
+          "name": "kek1",
+          "rus_name": "какае то хрень",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "table_name": "videocards",
+      "rus_name": "Видеокарты",
+      "columns": [
+        {
+          "name": "id",
+          "rus_name": "Идентификатор",
+          "type": "Pinteger"
+        },
+        {
+          "name": "name",
+          "rus_name": "Название",
+          "type": "string"
+        },
+        {
+          "name": "price",
+          "rus_name": "Цена",
+          "type": "integer"
+        },
+        {
+          "name": "count",
+          "rus_name": "счетчик",
+          "type": "string"
         }
       ]
     }
