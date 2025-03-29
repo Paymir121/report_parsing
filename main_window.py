@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QTableWidgetItem, QFileDialo
     QLineEdit
 from connection import Connection
 import pandas as pd
-from orm_models import ExampleModel
+from orm_models import ORMExampleModel, TableModel, TableColumnModel
 import settings as st
 
 
@@ -26,6 +26,7 @@ class MainWindow(QMainWindow):
             sys.exit(-1)
         self.window.show()
         print("MainWindow.__init__")
+        self.chose_table: TableModel = TableModel(ORMExampleModel)
         self.data_table: QTableWidget = self.window.data_tables
         self.export_pushbutton: QPushButton = self.window.export_pushbutton
         self.add_file_pushbutton: QPushButton = self.window.add_file_pushbutton
@@ -52,10 +53,10 @@ class MainWindow(QMainWindow):
 
     def add_orm_column_name(self):
         print(f"1: add_orm_column_name")
-        columns = ExampleModel.__table__.columns
+        columns = self.chose_table.columns
         for row_index, column in enumerate(columns[1:4]):
             print(f"2: column={column}")
-            self.data_table.setItem(row_index, 0, QTableWidgetItem(column.name))
+            self.data_table.setItem(row_index, 0, QTableWidgetItem(column.rus_name))
             line_edit: QLineEdit = QLineEdit()
             self.data_table.setCellWidget(row_index, 2, line_edit)
             line_edit.setText("=value")
@@ -96,7 +97,8 @@ class MainWindow(QMainWindow):
                 break  # Выйти из цикла, если встретилась пустая строка
             data: dict = {}
             for relationship in relationships_column_name:
-                column_in_orm = relationship["column_name_in_orm"]
+                column_in_orm = self.chose_table.get_column_by_rus_name(relationship["column_name_in_orm"]).orm_column_name
+
                 column_in_file = relationship["column_name_in_file"]
                 if column_in_file == st.AUX.NOT_CHOOSED_ITEM:
                     continue
@@ -106,6 +108,6 @@ class MainWindow(QMainWindow):
                 new_value = value
                 data[column_in_orm] = new_value
             print(f"9: data={data}")
-            orm_object: ExampleModel = ExampleModel(**data)
+            orm_object: ORMExampleModel = ORMExampleModel(**data)
             self.connection.session.add(orm_object)
         # self.connection.session.commit()
