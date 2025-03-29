@@ -7,6 +7,7 @@ from sqlalchemy import URL
 
 from orm_models import Base
 from settings import DATABASES
+from logger import py_logger
 
 
 class Connection:
@@ -51,9 +52,9 @@ class Connection:
             self.inspector: Inspector | None = inspect(subject=self.engine)
             self.inspector.clear_cache()
             self.connected = True
-            print(f"Подключение к базе данных прошло успешно")
+            py_logger.info(f"Подключение к базе данных прошло успешно")
         except SQLAlchemyError as err:
-            print(f"Не удалось подключиться к базе данных {err}, {err.__cause__}")
+            py_logger.error(f"Не удалось подключиться к базе данных {err}, {err.__cause__}")
             if self.connection:
                 self.connection.invalidate()
                 self.connection.close()

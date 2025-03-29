@@ -12,6 +12,7 @@ import pandas as pd
 from orm_models import  ORMTableModel, ORMTableColumnModel
 from data_models import  TableModel, TableColumnModel
 import settings as st
+from logger import py_logger
 
 
 class MainWindow(QMainWindow):
@@ -25,10 +26,10 @@ class MainWindow(QMainWindow):
         self.connection: Connection = Connection()
 
         if not self.window:
-            print(loader.errorString())
+            py_logger.info(loader.errorString())
             sys.exit(-1)
         self.window.show()
-        print("1: MainWindow.__init__")
+        py_logger.info("1: MainWindow.__init__")
         self.all_tables = self.connection.session.query(ORMTableModel).all()
         self.chose_table: TableModel = TableModel(self.all_tables[0])
         self.tables_combobox: QComboBox = self.window.tables_combobox
@@ -48,7 +49,7 @@ class MainWindow(QMainWindow):
         self.add_export_column_name()
 
     def change_table(self, selected_text: str) -> None:
-        print(f"2: change_table selected_text={selected_text}")
+        py_logger.info(f"2: change_table selected_text={selected_text}")
         if selected_text == st.AUX.NOT_CHOOSED_ITEM:
             return
         for table in self.all_tables:
@@ -60,7 +61,7 @@ class MainWindow(QMainWindow):
                 break
 
     def fill_records_table(self):
-        print(f"3: fill_records_table")
+        py_logger.info(f"3: fill_records_table")
         self.clear_records_table()
         records = self.connection.session.query(self.chose_table.orm_model).all()
         self.records_table.setRowCount(len(records))
@@ -77,7 +78,7 @@ class MainWindow(QMainWindow):
                 self.records_table.setItem(row_index, column_index, item_table_widget)
 
     def clear_records_table(self):
-        print(f"4: clear_records_table")
+        py_logger.info(f"4: clear_records_table")
         self.records_table.setRowCount(0)
         self.records_table.setColumnCount(0)
         self.records_table.setHorizontalHeaderLabels([])
@@ -87,17 +88,17 @@ class MainWindow(QMainWindow):
     def open_file_dialog(self):
         options = QFileDialog.Options()
         file_path, _ = QFileDialog.getOpenFileName(self, "Выберите файл", "", "All Files (*);;Text Files (*.txt)", options=options)
-        print(f"5: open_file_dialog file_name=", file_path)
+        py_logger.info(f"5: open_file_dialog file_name=", file_path)
         self.chose_file = pd.read_excel(file_path)
         self.add_export_column_name()
 
 
 
     def add_orm_column_name(self) -> None:
-        print(f"6: add_orm_column_name")
+        py_logger.info(f"6: add_orm_column_name")
         columns: list[TableColumnModel] = self.chose_table.columns
         for row_index, column in enumerate(columns):
-            print(f"7: column={column}")
+            py_logger.info(f"7: column={column}")
             orm_column_name_item: QTableWidgetItem = QTableWidgetItem(column.rus_name)
             self.data_table.setItem(row_index, 0, orm_column_name_item)
             if column.type_column == "Pinteger":
@@ -127,14 +128,14 @@ class MainWindow(QMainWindow):
         return combo_box
 
     def add_export_column_name(self) -> None:
-        print(f"7: pars_export_file")
+        py_logger.info(f"7: pars_export_file")
         for row_index in range(self.data_table.rowCount()):
             combo_box = self.create_combo_box_with_exel_columns()
             self.data_table.setCellWidget(row_index, 1, combo_box)
         self.add_orm_column_name()
 
     def create_relationships_column(self) -> None:
-        print(f"8:export_data_to_db")
+        py_logger.info(f"8:export_data_to_db")
         relationships_column_name: list[dict] = []
         for i in range(self.data_table.rowCount()):
             column_name_in_orm = self.data_table.item(i, 0).text()
@@ -143,20 +144,20 @@ class MainWindow(QMainWindow):
             column_name_in_file = self.data_table.cellWidget(i, 1).currentText()
             modification_data: str = self.data_table.cellWidget(i, 2).text()
             if column_name_in_file == st.AUX.NOT_CHOOSED_ITEM:
-                print(f"9: {column_name_in_orm}={column_name_in_file}")
+                py_logger.info(f"9: {column_name_in_orm}={column_name_in_file}")
                 # return
-            print(f"10: {column_name_in_orm}={column_name_in_file}")
+            py_logger.info(f"10: {column_name_in_orm}={column_name_in_file}")
             relationship_column: dict = {
                 "column_name_in_orm": column_name_in_orm,
                 "column_name_in_file": column_name_in_file,
                 "modification_data": modification_data
             }
             relationships_column_name.append( relationship_column )
-        print(f"11: relationship_column_name={relationships_column_name}")
+        py_logger.info(f"11: relationship_column_name={relationships_column_name}")
         self.export_data_to_db(relationships_column_name)
 
     def export_data_to_db(self, relationships_column_name: list[dict]) -> None:
-        print(f"12: export_data_to_db")
+        py_logger.info(f"12: export_data_to_db")
         for index, row in self.chose_file.iterrows():
             if row.isnull().all():  # Проверка, пустая ли вся строка
                 break  # Выйти из цикла, если встретилась пустая строка
@@ -172,9 +173,9 @@ class MainWindow(QMainWindow):
                 # new_value = eval(f"{modification_data}")
                 new_value = value
                 data[column_in_orm] = new_value
-            print(f"13: data={data}")
+            py_logger.info(f"13: data={data}")
             orm_object = self.chose_table.orm_model(**data)
             self.connection.session.add(orm_object)
-            print(f"14: orm_object={orm_object}")
+            py_logger.info(f"14: orm_object={orm_object}")
         self.connection.session.commit()
         self.fill_records_table()

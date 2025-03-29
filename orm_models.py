@@ -4,6 +4,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
 from sqlalchemy.orm import relationship
+from logger import py_logger
 
 Base = declarative_base()
 

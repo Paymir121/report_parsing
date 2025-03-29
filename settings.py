@@ -22,5 +22,10 @@ elif os.getenv("DRIVERNAME") == "sqlite":
                 "database": os.getenv("DATABASE", "example.db"),
             }
 
+logging_to_file: bool = True
+logging_level: str = "ERROR"
+
+
+
 class AUX:
     NOT_CHOOSED_ITEM: str = "<-не выбран->"

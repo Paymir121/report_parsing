@@ -2,6 +2,7 @@ import json
 
 from connection import Connection
 from orm_models import ORMTableModel, ORMTableColumnModel, Base
+from logger import py_logger
 def fill_example_tables_in_db():
     connection: Connection = Connection()
     Base.metadata.create_all(

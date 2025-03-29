@@ -4,6 +4,7 @@ from main_window import MainWindow
 import sys
 from orm_models import create_table_in_db
 from file_db_example import fill_example_tables_in_db
+from logger import py_logger
 
 def run():
     loader: QUiLoader = QUiLoader()
@@ -13,6 +14,10 @@ def run():
 
 
 if __name__ == '__main__':
-    create_table_in_db()
-    fill_example_tables_in_db()
+    py_logger.info("Start program")
+    try:
+        create_table_in_db()
+        # fill_example_tables_in_db()
+    except Exception as e:
+        py_logger.error(e)
     run()
