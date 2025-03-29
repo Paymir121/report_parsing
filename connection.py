@@ -59,4 +59,3 @@ class Connection:
                 self.connection.close()
             self.engine.dispose()
 
-    # def create_table(self, table:):

@@ -1,0 +1,46 @@
+{
+  "tables": [
+    {
+      "table_name": "users",
+      "rus_name": "Пользователи",
+      "columns": [
+        {
+          "name": "id",
+          "rus_name": "Идентификатор",
+          "type": "Pinteger"
+        },
+        {
+          "name": "username",
+          "rus_name": "Имя пользователя",
+          "type": "string"
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "rus_name": "Электронная почта"
+        }
+      ]
+    },
+    {
+      "table_name": "posts",
+      "rus_name": "Посты",
+      "columns": [
+        {
+          "name": "id",
+          "rus_name": "Идентификатор",
+          "type": "Pinteger"
+        },
+        {
+          "name": "title",
+          "rus_name": "Заголовок",
+          "type": "string"
+        },
+        {
+          "name": "content",
+          "rus_name": "Содержание",
+          "type": "string"
+        }
+      ]
+    }
+  ]
+}

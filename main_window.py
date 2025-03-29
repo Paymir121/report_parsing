@@ -7,7 +7,8 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QTableWidgetItem, QFileDialo
     QLineEdit
 from connection import Connection
 import pandas as pd
-from orm_models import ORMExampleModel, TableModel, TableColumnModel
+from orm_models import  ORMTableModel, ORMTableColumnModel
+from data_models import  TableModel, TableColumnModel
 import settings as st
 
 
@@ -26,19 +27,34 @@ class MainWindow(QMainWindow):
             sys.exit(-1)
         self.window.show()
         print("MainWindow.__init__")
-        self.chose_table: TableModel = TableModel(ORMExampleModel)
+        self.all_tables = self.connection.session.query(ORMTableModel).all()
+        self.chose_table: TableModel = TableModel(self.all_tables[0])
+        self.tables_combobox: QComboBox = self.window.tables_combobox
         self.data_table: QTableWidget = self.window.data_tables
         self.export_pushbutton: QPushButton = self.window.export_pushbutton
         self.add_file_pushbutton: QPushButton = self.window.add_file_pushbutton
 
+        self.tables_combobox.addItems([table.rus_name for table in self.all_tables])
+
         self.export_pushbutton.clicked.connect(self.create_relationships_column)
         self.add_file_pushbutton.clicked.connect(self.open_file_dialog)
+        self.tables_combobox.currentTextChanged.connect(self.change_table)
+
 
         self.data_table.setRowCount(3)
         self.chose_file = None
         self.chose_file = pd.read_excel("example.xlsx")
         self.add_export_column_name()
         self.add_orm_column_name()
+
+    def change_table(self, selected_text):
+        print(f"change_table selected_text={selected_text}")
+        for table in self.all_tables:
+            if table.rus_name == selected_text:
+                self.chose_table = TableModel(table)
+                self.data_table.setRowCount(len(self.chose_table.columns))
+                self.add_orm_column_name()
+                return
 
 
 
@@ -54,7 +70,7 @@ class MainWindow(QMainWindow):
     def add_orm_column_name(self):
         print(f"1: add_orm_column_name")
         columns = self.chose_table.columns
-        for row_index, column in enumerate(columns[1:4]):
+        for row_index, column in enumerate(columns):
             print(f"2: column={column}")
             self.data_table.setItem(row_index, 0, QTableWidgetItem(column.rus_name))
             line_edit: QLineEdit = QLineEdit()
@@ -108,6 +124,7 @@ class MainWindow(QMainWindow):
                 new_value = value
                 data[column_in_orm] = new_value
             print(f"9: data={data}")
-            orm_object: ORMExampleModel = ORMExampleModel(**data)
+            orm_object = self.chose_table.orm_model(**data)
             self.connection.session.add(orm_object)
-        # self.connection.session.commit()
+            print(f"10: orm_object={orm_object}")
+        self.connection.session.commit()
