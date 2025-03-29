@@ -12,6 +12,7 @@
 - **PostgreSQL - 13.10**
 - **PySide - 6**
 - **SQLAlchemy**
+- **pandas**
 
 ### Авторы
 - [Nikki Nikonor](https://github.com/Paymir121)
