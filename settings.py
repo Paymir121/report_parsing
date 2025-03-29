@@ -22,3 +22,6 @@ elif os.getenv("DRIVERNAME") == "sqlite":
                 "drivername": os.getenv("DRIVERNAME","sqlite"),
                 "database": os.getenv("DATABASE", "example.db"),
             }
+
+class AUX:
+    NOT_CHOOSED_ITEM: str = "<-не выбран->"

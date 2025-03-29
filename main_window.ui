@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>446</width>
-    <height>388</height>
+    <width>634</width>
+    <height>438</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -19,7 +19,7 @@
      <rect>
       <x>10</x>
       <y>10</y>
-      <width>301</width>
+      <width>521</width>
       <height>321</height>
      </rect>
     </property>
@@ -34,18 +34,23 @@
       <rect>
        <x>20</x>
        <y>60</y>
-       <width>256</width>
+       <width>481</width>
        <height>192</height>
       </rect>
      </property>
      <column>
       <property name="text">
-       <string>Tables</string>
+       <string>Колонки В БД</string>
       </property>
      </column>
      <column>
       <property name="text">
-       <string>Export</string>
+       <string>Колонки в файле *.xls</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Модификация</string>
       </property>
      </column>
     </widget>
@@ -92,7 +97,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>446</width>
+     <width>634</width>
      <height>26</height>
     </rect>
    </property>
