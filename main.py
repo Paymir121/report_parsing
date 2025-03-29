@@ -2,6 +2,8 @@ from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import QApplication
 from main_window import MainWindow
 import sys
+from orm_models import create_table_in_db
+from file_db_example import fill_example_tables_in_db
 
 def run():
     loader: QUiLoader = QUiLoader()
@@ -11,4 +13,6 @@ def run():
 
 
 if __name__ == '__main__':
+    create_table_in_db()
+    fill_example_tables_in_db()
     run()

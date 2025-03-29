@@ -1,9 +1,8 @@
 import json
 
-from sqlalchemy import delete
-
 from connection import Connection
-if __name__ == '__main__':
+
+def fill_example_tables_in_db():
     from orm_models import ORMTableModel, ORMTableColumnModel, Base
     connection = Connection()
     Base.metadata.create_all(

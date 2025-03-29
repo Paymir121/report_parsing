@@ -10,7 +10,7 @@ Base = declarative_base()
 class ORMTableModel(Base):
     __tablename__ = 'tables'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    table_name = Column(String(50), nullable=False)
+    table_name = Column(String(50), nullable=False, unique=True)
     rus_name = Column(String(50), nullable=False)
     columns = relationship("ORMTableColumnModel", back_populates="table")
 
@@ -23,9 +23,12 @@ class ORMTableColumnModel(Base):
     table = relationship("ORMTableModel", back_populates="columns")
     type_column = Column(String(50), default="string")
 
-if __name__ == '__main__':
+def create_table_in_db():
     from connection import Connection
     conn = Connection()
     Base.metadata.create_all(
         bind=conn.engine,
     )
+
+if __name__ == '__main__':
+    create_table_in_db()
