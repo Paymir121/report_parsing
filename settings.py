@@ -7,7 +7,6 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY_DJANGO", "key does not exist")
 
 if os.getenv("DRIVERNAME") == "postgresql+psycopg2":
-
         DATABASES: dict = {
                 "drivername": os.getenv("DRIVERNAME","postgresql+psycopg2"),
                 "username": os.getenv("USERNAME", "postgres"),
