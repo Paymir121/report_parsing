@@ -69,8 +69,6 @@ class TableModel:
                 return column
 
 
-
-
 if __name__ == '__main__':
     connection = Connection()
     tables = connection.session.query(ORMTableModel).all()
