@@ -394,10 +394,13 @@ class MainWindow(QMainWindow):
         return data
 
     def _apply_values_to_table(self, data: dict):
-        """Подставить словарь data (имя_поля -> значение) в ячейки таблицы."""
+        """
+        Подставить в таблицу полей только те значения из data, для которых есть ключ
+        (имя_поля -> значение). Поля, которых нет в источнике (другой Excel, запись),
+        не изменяются — данные из разных Excel можно подставлять по частям.
+        """
         if self._data_tables is None or not self._current_fields:
             return
-        # Сопоставление без учёта регистра: ключ в data уже upper(), ищем по field_name
         data_upper = {k.upper(): v for k, v in data.items()}
         applied = 0
         for row in range(self._data_tables.rowCount()):
@@ -405,7 +408,9 @@ class MainWindow(QMainWindow):
                 break
             field_name, _ = self._current_fields[row]
             key = field_name.upper()
-            value = data_upper.get(key) or data.get(field_name) or ""
+            if key not in data_upper and field_name not in data:
+                continue  # поля нет в источнике — не трогаем ячейку
+            value = data_upper.get(key, data.get(field_name, ""))
             w = self._data_tables.cellWidget(row, 1)
             if w is None:
                 continue
