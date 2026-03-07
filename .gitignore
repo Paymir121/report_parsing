@@ -8,7 +8,7 @@ widgets.json
 *.so
 pyproject.toml
 my_working/
-
+.idea/
 # Distribution / packaging
 .Python
 build/dist/
