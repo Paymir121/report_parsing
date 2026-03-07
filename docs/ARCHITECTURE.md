@@ -1,6 +1,6 @@
 # Архитектура проекта report_parsing
 
-Десктопное приложение для заполнения Word-шаблонов (Jinja2) и генерации документов: загрузка шаблона → извлечение полей `{{ FIELD }}` → ввод/выбор значений (вручную или из Excel) → сохранение .docx через docxtpl.
+Десктопное приложение для заполнения Word-шаблонов (Jinja2) и генерации документов: загрузка шаблона → извлечение полей `{{ FIELD }}` → ввод/выбор значений (вручную или из Excel) → сохранение .docx через docxtpl. Настройки интерфейса и БД, геометрия и состояние главного окна хранятся в QSettings.
 
 ---
 
@@ -14,8 +14,8 @@
 | ORM              | SQLAlchemy 2.x                      |
 | Шаблоны Word     | python-docx, Jinja2, docxtpl        |
 | Импорт значений  | openpyxl (Excel)                    |
-| Конфигурация     | python-dotenv, `settings.py`        |
-| Логирование      | Модуль `logger`                     |
+| Конфигурация     | python-dotenv, `settings.py`, **QSettings** |
+| Логирование      | Модуль `logger`, панель лога в UI   |
 
 ---
 
@@ -23,25 +23,29 @@
 
 ```
 report_parsing/
-├── main.py                 # Точка входа: БД, QApplication, MainWindow
-├── main_window.py          # Главное окно: загрузка .ui, привязка виджетов, логика UI
-├── settings.py              # Конфигурация БД и приложения
-├── abstract_dialog.py       # Базовый класс диалогов (если используется)
+├── main.py                 # Точка входа: QApplication, QSettings (name/org), load_from_qsettings, БД, MainWindow
+├── main_window.py          # Главное окно: .ui, виджеты, лог-панель, геометрия/состояние, меню «Настройки»
+├── settings.py             # Конфигурация БД и приложения; load_from_qsettings() — чтение из QSettings
+├── settings_dialog.py      # Модальное окно настроек (вкладки «Интерфейс» и «БД»), запись в QSettings
+├── abstract_dialog.py      # Базовый класс диалогов (если используется)
 ├── db/
-│   ├── connection.py        # Подключение к БД (singleton), Session
-│   └── models.py            # SQLAlchemy-модели и create_all_tables
+│   ├── connection.py       # Подключение к БД (singleton), Session
+│   └── models.py           # SQLAlchemy-модели и create_all_tables
 ├── core/
-│   ├── template_parser.py   # Извлечение переменных из .docx (Jinja2 AST)
-│   └── document_generator.py# Рендер .docx по шаблону и контексту (docxtpl)
+│   ├── template_parser.py  # Извлечение переменных из .docx (Jinja2 AST)
+│   └── document_generator.py # Рендер .docx по шаблону и контексту (docxtpl)
 ├── services/
-│   ├── template_service.py  # Шаблоны: список, регистрация, поля из файла
+│   ├── template_service.py # Шаблоны: список, регистрация, поля из файла
 │   ├── field_value_service.py # Справочники значений полей (field_values)
 │   └── generation_service.py  # Генерация документа и запись в историю
 ├── ui/
-│   ├── main_window.ui       # Макет главного окна (Qt Designer)
-│   └── main_window_ui.py     # Сгенерированный Python (опционально, не используется при запуске)
+│   ├── main_window.ui      # Макет главного окна (Qt Designer)
+│   └── main_window_ui.py   # Сгенерированный Python (опционально, не используется при запуске)
 ├── logger/
-│   └── logger.py            # Настройка логирования
+│   └── logger.py           # Настройка логирования
+├── docs/
+│   ├── ARCHITECTURE.md     # Этот документ
+│   └── ИНСТРУКЦИЯ.md       # Инструкция по применению
 └── tests/
     ├── init_db.py           # Создание таблиц и начальное заполнение
     ├── create_sample_template.py  # Тестовые .docx-шаблоны
@@ -55,16 +59,19 @@ report_parsing/
 
 ### 3.1. Точка входа (`main.py`)
 
-- Подключение к БД и создание таблиц (`Connection`, `create_all_tables`).
 - Создание `QUiLoader` до `QApplication` (рекомендация для Windows).
-- Создание приложения Qt и главного окна с путём к `ui/main_window.ui`.
-- Запуск цикла событий.
+- `QApplication(sys.argv)`, затем `QCoreApplication.setApplicationName("WordTemplates")` и `setOrganizationName("ReportParsing")` для области хранения QSettings.
+- Вызов `settings.load_from_qsettings()` — перечитывает из QSettings настройки БД и каталога шаблонов (при наличии).
+- Подключение к БД и создание таблиц (`Connection`, `create_all_tables`) — уже с учётом QSettings.
+- Создание главного окна с путём к `ui/main_window.ui`, показ окна, запуск цикла событий.
 
 ### 3.2. UI (`main_window.py`, `ui/main_window.ui`)
 
-- **Загрузка интерфейса**: форма загружается из `.ui` в рантайме через `QUiLoader` (без генерации в Python при старте). Путь к файлу считается от каталога `main_window.py`. При ошибке открытия файла используется чтение через `QBuffer` и байты файла.
-- **Виджеты**: центральный виджет загруженной формы подменяет central widget главного окна; ссылка на загруженный виджет хранится в `_loaded_ui`. Элементы ищутся по `objectName` через `_find(type_, name)`.
-- **Основные элементы**: кнопка загрузки шаблона, комбобокс шаблонов, кнопка «Вставить из Excel», таблица полей (Поле / Значение), кнопка «Сгенерировать документ».
+- **Загрузка интерфейса**: форма загружается из `.ui` в рантайме через `QUiLoader`. Путь к файлу — относительно каталога `main_window.py`. При ошибке открытия QFile используется чтение через `QBuffer` и байты файла. Ссылка на загруженный виджет хранится в `_loaded_ui`; центральный виджет подменяется в главном окне.
+- **Виджеты**: элементы ищутся по `objectName` через `_find(type_, name)`. Основные: кнопка загрузки шаблона, комбобокс шаблонов, кнопка «Вставить из Excel», таблица полей (Поле / Значение), кнопка «Сгенерировать документ».
+- **Панель лога**: скрываемая/раскрываемая панель снизу окна. `LogSignalBridge` (QObject + Signal(str)) и `QtLogHandler` (logging.Handler) перенаправляют сообщения логгера в `QPlainTextEdit`; при запуске раскрытие панели задаётся настройкой из QSettings («Раскрывать панель лога при запуске»).
+- **Геометрия и состояние окна**: при старте из QSettings восстанавливаются `MainWindow/geometry` и `MainWindow/state`; при отсутствии сохранённых данных окно открывается развёрнутым (`WindowMaximized`). При изменении состояния окна (`changeEvent` с `WindowStateChange`) и при закрытии (`closeEvent`) геометрия и состояние сохраняются в QSettings.
+- **Меню**: в меню бар добавляется «Сервис» → «Настройки…», открывающее модальный диалог `SettingsDialog`. После принятия диалога обновляется `settings.DEFAULT_TEMPLATES_DIR` из QSettings (каталог шаблонов действует без перезапуска).
 - **Логика**: обновление списка шаблонов, смена шаблона → заполнение таблицы полей и подстановка значений из БД, импорт из Excel (колонки «имя»/«значение»), сбор контекста из таблицы и вызов сервиса генерации с выбором пути сохранения.
 
 ### 3.3. Сервисы (`services/`)
@@ -80,8 +87,14 @@ report_parsing/
 
 ### 3.5. База данных (`db/`)
 
-- **connection**: синглтон; создание `Engine` и `Session` из настроек в `settings.py` (SQLite по умолчанию, при необходимости PostgreSQL).
+- **connection**: синглтон; создание `Engine` и `Session` из настроек в `settings.py` (SQLite по умолчанию, при необходимости PostgreSQL). Настройки при старте могут быть переопределены из QSettings через `load_from_qsettings()`.
 - **models**: декларативные модели и создание таблиц.
+
+### 3.6. Окно настроек (`settings_dialog.py`)
+
+- **SettingsDialog**: модальный диалог с вкладками «Интерфейс» и «БД». Все значения читаются и записываются в QSettings (ключи `Interface/*`, `Database/*`).
+- **Интерфейс**: «Раскрывать панель лога при запуске», «Каталог шаблонов по умолчанию» (с кнопкой «Обзор»).
+- **БД**: тип БД (SQLite / PostgreSQL); для SQLite — путь к файлу; для PostgreSQL — хост, порт, имя БД, пользователь, пароль. Изменения БД применяются после перезапуска приложения.
 
 ---
 
@@ -110,14 +123,16 @@ report_parsing/
 
 ## 6. Конфигурация
 
-- **settings.py**: выбор БД по переменной окружения `DRIVERNAME` (при `postgresql+psycopg2` — PostgreSQL, иначе SQLite). Для SQLite имя файла задаётся через `DATABASE` (по умолчанию `word_templates.db`). Опционально: `TEMPLATES_DIR`, логирование.
-- Переменные окружения через `.env` (python-dotenv).
+- **QSettings**: область задаётся через `QCoreApplication.setApplicationName("WordTemplates")` и `setOrganizationName("ReportParsing")`. В QSettings хранятся: геометрия и состояние главного окна (`MainWindow/geometry`, `MainWindow/state`); настройки интерфейса (`Interface/LogExpandedAtStartup`, `Interface/TemplatesDir`); настройки БД (`Database/Driver`, `Database/SqlitePath`, `Database/PgHost` и др.). При старте вызывается `settings.load_from_qsettings()` — при наличии сохранённых значений переопределяются `DATABASES` и `DEFAULT_TEMPLATES_DIR`.
+- **settings.py**: значения по умолчанию — из переменных окружения (`.env`, python-dotenv): `DRIVERNAME`, `DATABASE`, `TEMPLATES_DIR` и для PostgreSQL — `USERNAME`, `PASSWORD`, `HOST`, `PORT`. Функция `load_from_qsettings()` перечитывает настройки из QSettings после создания QApplication.
 
 ---
 
 ## 7. Зависимости ключевых модулей
 
-- **main_window** → db.connection, db.models (DocumentTemplate), services (template, field_value, generation), logger, settings.
+- **main** → PySide6 (QApplication, QCoreApplication), settings (load_from_qsettings), db.connection, db.models (create_all_tables), main_window.
+- **main_window** → db.connection, db.models (DocumentTemplate), services (template, field_value, generation), logger, settings, settings_dialog (SettingsDialog, get_settings_interface_*).
+- **settings_dialog** → PySide6 (QDialog, QSettings, виджеты вкладок).
 - **services** → db.connection, db.models, core (template_parser, document_generator), logger.
 - **core** → python-docx, jinja2, docxtpl (document_generator), logger.
 

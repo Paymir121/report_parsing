@@ -6,10 +6,12 @@ import logging
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QByteArray, QFile, QIODevice, Qt, QObject, Signal
-from PySide6.QtUiTools import QUiLoader
+from PySide6.QtCore import QBuffer, QByteArray, QFile, QIODevice, Qt, QObject, Signal, QEvent
+from PySide6.QtCore import QSettings
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QComboBox,
+    QDialog,
     QFrame,
     QFileDialog,
     QHBoxLayout,
@@ -31,6 +33,7 @@ import settings as st
 from services.template_service import load_templates_list, register_template, get_template_fields
 from services.field_value_service import get_values_by_template_id
 from services.generation_service import generate_document
+from settings_dialog import SettingsDialog, get_settings_interface_log_expanded, get_settings_interface_templates_dir
 
 
 class LogSignalBridge(QObject):
@@ -116,7 +119,9 @@ class MainWindow(QMainWindow):
         self.connection = Connection()
         self._bind_ui()
         self._setup_log_panel()
+        self._setup_menu_settings()
         self.setWindowTitle("Word-шаблоны")
+        self._restore_geometry_state()
         py_logger.info("MainWindow initialized (Word templates)")
 
     def _setup_stub_ui(self):
@@ -213,6 +218,56 @@ class MainWindow(QMainWindow):
         self._log_edit.verticalScrollBar().setValue(
             self._log_edit.verticalScrollBar().maximum()
         )
+
+    def _settings_obj(self) -> QSettings:
+        return QSettings()
+
+    def _restore_geometry_state(self):
+        """Восстановить размер, позицию и состояние окна из QSettings; иначе — на весь экран."""
+        s = self._settings_obj()
+        geom = s.value("MainWindow/geometry")
+        state = s.value("MainWindow/state")
+        if isinstance(geom, QByteArray) and geom:
+            self.restoreGeometry(geom)
+        if isinstance(state, QByteArray) and state:
+            self.restoreState(state)
+        if not (geom and state):
+            self.setWindowState(Qt.WindowState.WindowMaximized)
+        if getattr(self, "_log_edit", None) and get_settings_interface_log_expanded():
+            if self._log_edit.isHidden():
+                self._on_log_toggle()
+
+    def _save_geometry_state(self):
+        """Сохранить геометрию и состояние окна в QSettings."""
+        s = self._settings_obj()
+        s.setValue("MainWindow/geometry", self.saveGeometry())
+        s.setValue("MainWindow/state", self.saveState())
+        s.sync()
+
+    def closeEvent(self, event):
+        self._save_geometry_state()
+        super().closeEvent(event)
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.WindowStateChange:
+            self._save_geometry_state()
+        super().changeEvent(event)
+
+    def _setup_menu_settings(self):
+        """Добавить в меню бар пункт «Сервис» -> «Настройки»."""
+        menubar = self.menuBar()
+        if menubar is None:
+            return
+        menu_serv = menubar.addMenu("Сервис")
+        act = QAction("Настройки…", self)
+        act.triggered.connect(self._on_settings)
+        menu_serv.addAction(act)
+
+    def _on_settings(self):
+        """Открыть модальное окно настроек."""
+        dlg = SettingsDialog(self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            st.DEFAULT_TEMPLATES_DIR = get_settings_interface_templates_dir()
 
     def _on_load_from_excel(self):
         """Загрузить значения из Excel (колонки: имя поля, значение) и подставить в таблицу."""
