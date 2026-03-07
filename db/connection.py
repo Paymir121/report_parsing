@@ -3,8 +3,9 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
-from logger import py_logger
-from orm_models import Base
+from logger.logger import py_logger
+
+from db.models import Base
 from settings import DATABASES
 
 
@@ -26,22 +27,18 @@ class Connection:
         if self.connected:
             return
         self.connected: bool = False
-        db_config: dict = {
-            "drivername": "postgresql+psycopg2",
-            "username": "postgres",
-            "password": "456852",
-            "host": "localhost",
-            "database": "test_db",
-            "port": 5432,
-        }
-        # self.url_object: URL = URL.create(**DATABASES)
-        self.url_object: URL = URL.create(**db_config)
+        try:
+            db_config = dict(DATABASES) if DATABASES else None
+        except Exception:
+            db_config = None
+        if not db_config or not db_config.get("drivername"):
+            db_config = {"drivername": "sqlite", "database": "word_templates.db"}
+        self.url_object = URL.create(**db_config)
 
-        self.engine: Engine = create_engine(
-            self.url_object,
-            echo=True,
-            client_encoding="utf8",
-        )
+        kwargs = {"echo": True}
+        if db_config.get("drivername", "").startswith("postgresql"):
+            kwargs["client_encoding"] = "utf8"
+        self.engine: Engine = create_engine(self.url_object, **kwargs)
         try:
             self.connection = self.engine.connect()
             self.Session = sessionmaker(bind=self.engine)

@@ -6,6 +6,7 @@ load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY_DJANGO", "key does not exist")
 
+# По умолчанию — SQLite (без установки PostgreSQL)
 if os.getenv("DRIVERNAME") == "postgresql+psycopg2":
     DATABASES: dict = {
         "drivername": os.getenv("DRIVERNAME", "postgresql+psycopg2"),
@@ -15,15 +16,21 @@ if os.getenv("DRIVERNAME") == "postgresql+psycopg2":
         "database": os.getenv("DATABASE", "test_db"),
         "port": int(os.getenv("PORT", "5432")),
     }
-    print(f"DATABASES {DATABASES}")
-elif os.getenv("DRIVERNAME") == "sqlite":
+else:
+    # SQLite: файл в корне проекта или из env
+    _db_name = os.getenv("DATABASE", "word_templates.db")
+    if not _db_name.endswith(".db"):
+        _db_name = _db_name + ".db"
     DATABASES: dict = {
-        "drivername": os.getenv("DRIVERNAME", "sqlite"),
-        "database": os.getenv("DATABASE", "example.db"),
+        "drivername": "sqlite",
+        "database": _db_name,
     }
 
 logging_to_file: bool = True
 logging_level: str = "ERROR"
+
+# Каталог шаблонов по умолчанию (для Word-шаблонов)
+DEFAULT_TEMPLATES_DIR: str = os.getenv("TEMPLATES_DIR", "")
 
 
 class AUX:
