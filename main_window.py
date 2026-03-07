@@ -2,20 +2,25 @@
 Главное окно приложения Word-шаблонов.
 Интерфейс загружается из .ui файла в рантайме (QUiLoader), без генерации в Python.
 """
+import logging
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QBuffer, QByteArray, QFile, QIODevice, Qt
+from PySide6.QtCore import QBuffer, QByteArray, QFile, QIODevice, Qt, QObject, Signal
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import (
     QComboBox,
+    QFrame,
     QFileDialog,
+    QHBoxLayout,
     QLineEdit,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -26,6 +31,25 @@ import settings as st
 from services.template_service import load_templates_list, register_template, get_template_fields
 from services.field_value_service import get_values_by_template_id
 from services.generation_service import generate_document
+
+
+class LogSignalBridge(QObject):
+    """Мост для передачи сообщений лога в UI из любого потока (сигнал очередится в главный поток)."""
+    log_message = Signal(str)
+
+
+class QtLogHandler(logging.Handler):
+    """Обработчик логирования, перенаправляющий сообщения в Qt-сигнал."""
+    def __init__(self, signal_bridge: LogSignalBridge):
+        super().__init__()
+        self._bridge = signal_bridge
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            msg = self.format(record)
+            self._bridge.log_message.emit(msg)
+        except Exception:
+            self.handleError(record)
 
 
 class MainWindow(QMainWindow):
@@ -91,6 +115,7 @@ class MainWindow(QMainWindow):
         self.window = self.centralWidget()
         self.connection = Connection()
         self._bind_ui()
+        self._setup_log_panel()
         self.setWindowTitle("Word-шаблоны")
         py_logger.info("MainWindow initialized (Word templates)")
 
@@ -128,6 +153,66 @@ class MainWindow(QMainWindow):
         self._load_excel_btn = self._find(QPushButton, "load_excel_pushbutton")
         if self._load_excel_btn is not None:
             self._load_excel_btn.clicked.connect(self._on_load_from_excel)
+
+    def _setup_log_panel(self):
+        """Скрываемая/раскрываемая панель лога снизу главного окна."""
+        layout = self.window.layout()
+        if layout is None:
+            return
+
+        self._log_bridge = LogSignalBridge(self)
+        self._log_edit = QPlainTextEdit(self.window)
+        self._log_edit.setReadOnly(True)
+        self._log_edit.setMinimumHeight(80)
+        self._log_edit.setMaximumHeight(200)
+        self._log_edit.setMaximumBlockCount(2000)
+        self._log_edit.setPlaceholderText("Лог (раскройте кнопкой «Лог ▼»)")
+        self._log_edit.hide()
+
+        self._log_toggle_btn = QPushButton("Лог ▼", self.window)
+        self._log_toggle_btn.setToolTip("Показать/скрыть панель лога")
+        self._log_toggle_btn.setMaximumWidth(80)
+        self._log_clear_btn = QPushButton("Очистить", self.window)
+        self._log_clear_btn.setMaximumWidth(80)
+
+        bar = QWidget(self.window)
+        bar_layout = QHBoxLayout(bar)
+        bar_layout.setContentsMargins(0, 4, 0, 0)
+        bar_layout.addWidget(self._log_toggle_btn)
+        bar_layout.addWidget(self._log_clear_btn)
+        bar_layout.addStretch()
+
+        log_container = QFrame(self.window)
+        log_container.setFrameStyle(QFrame.Shape.StyledPanel)
+        log_v = QVBoxLayout(log_container)
+        log_v.setContentsMargins(4, 0, 4, 4)
+        log_v.addWidget(bar)
+        log_v.addWidget(self._log_edit)
+
+        self._log_toggle_btn.clicked.connect(self._on_log_toggle)
+        self._log_clear_btn.clicked.connect(lambda: self._log_edit.clear())
+        self._log_bridge.log_message.connect(self._append_log_message)
+
+        handler = QtLogHandler(self._log_bridge)
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+        py_logger.addHandler(handler)
+        self._qt_log_handler = handler
+
+        layout.addWidget(log_container)
+
+    def _on_log_toggle(self):
+        if self._log_edit.isVisible():
+            self._log_edit.hide()
+            self._log_toggle_btn.setText("Лог ▼")
+        else:
+            self._log_edit.show()
+            self._log_toggle_btn.setText("Лог ▲")
+
+    def _append_log_message(self, msg: str):
+        self._log_edit.appendPlainText(msg)
+        self._log_edit.verticalScrollBar().setValue(
+            self._log_edit.verticalScrollBar().maximum()
+        )
 
     def _on_load_from_excel(self):
         """Загрузить значения из Excel (колонки: имя поля, значение) и подставить в таблицу."""
