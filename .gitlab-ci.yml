@@ -1,0 +1,112 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "romanov1"'
+      when: always
+    - when: never
+
+stages:
+  - install
+  - test
+  - build
+  - deploy
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR\\.cache\\pip"
+  DEPLOY_PATH: "C:\\dsconfig"
+
+cache:
+  paths:
+    - .cache/pip
+
+# ========================= INSTALL STAGE =========================
+install_dependencies:
+  stage: install
+  tags:
+    - win32
+  script:
+    - "Write-Host '🔧 Checking Python version...'"
+    - "python --version"
+    - "Write-Host '📦 Updating pip...'"
+    - "python -m pip install --upgrade pip"
+    - "Write-Host '📦 Installing dependencies...'"
+    - "pip install -r requirements.txt"
+    - "pip install nuitka"
+  artifacts:
+    name: "deps_$CI_COMMIT_REF_SLUG"
+    expire_in: 1 hour
+    paths:
+      - .cache/pip
+
+
+# ========================= TEST STAGE =========================
+run_tests:
+  stage: test
+  tags:
+    - win32
+  script:
+    - "Write-Host '🧪 Запуск тестов...'"
+    - "pip install pytest"
+    - "Write-Host '📂 Содержимое папки tests:'"
+    - "Get-ChildItem -Recurse tests"
+
+    # Если нет .py файлов — пропускаем тесты, но не падаем
+    - "$testFiles = Get-ChildItem -Path tests -Recurse -Filter *.py"
+    - "if ($testFiles.Count -eq 0) { Write-Host '⚠️ Нет тестовых файлов, пропускаем'; exit 0 }"
+
+    # Запуск pytest
+    - "pytest tests --maxfail=1 --disable-warnings -q"
+
+
+# ========================= BUILD STAGE =========================
+build_app:
+  stage: build
+  tags:
+    - win32
+  script:
+    - "Write-Host '🚀 Запуск сборки проекта через Nuitka...'"
+    - "python build/build.py"
+
+  dependencies:
+    - install_dependencies
+    - run_tests
+
+  artifacts:
+    name: "dist_$CI_COMMIT_REF_SLUG"
+    paths:
+      - dist/
+      - build/dist/
+    expire_in: 1 days
+
+
+# ========================= DEPLOY STAGE =========================
+deploy_build:
+  stage: deploy
+  tags:
+    - win32
+  script:
+    - "Write-Host '📁 Подготовка конечной директории для сборки...'"
+    - "$targetDir = Join-Path $env:DEPLOY_PATH \"$env:CI_COMMIT_REF_SLUG`_$env:CI_COMMIT_SHORT_SHA\""
+    - "Write-Host \"Создаём директорию: $targetDir\""
+
+    # Удаляем старую директорию, если существует
+    - "if (Test-Path $targetDir) { Remove-Item $targetDir -Recurse -Force }"
+
+    # Создаем новую директорию
+    - "New-Item -ItemType Directory -Force -Path $targetDir | Out-Null"
+
+    - "Write-Host '📦 Копируем файлы из dist...'"
+
+    # Вариант 1: Копирование файлов с проверкой
+    - "if (Test-Path 'dist') {"
+    - "  Get-ChildItem -Path 'dist' | ForEach-Object {"
+    - "    Copy-Item -Path $_.FullName -Destination $targetDir -Recurse -Force"
+    - "  }"
+    - "  Write-Host '✅ Сборка успешно развернута!'"
+    - "  Write-Host \"Путь: $targetDir\""
+    - "} else {"
+    - "  Write-Error '❌ Папка dist не найдена!'"
+    - "  exit 1"
+    - "}"
+
+  dependencies:
+    - build_app
