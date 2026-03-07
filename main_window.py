@@ -30,10 +30,18 @@ from db.connection import Connection
 from db.models import DocumentTemplate
 from logger import py_logger
 import settings as st
-from services.template_service import load_templates_list, register_template, get_template_fields
+from services.template_service import (
+    get_template_linked_data_table,
+    load_templates_list,
+    register_template,
+    get_template_fields,
+)
 from services.field_value_service import get_values_by_template_id
 from services.generation_service import generate_document
+from services.data_table_service import list_records, get_record_values
 from settings_dialog import SettingsDialog, get_settings_interface_log_expanded, get_settings_interface_templates_dir
+from excel_import_dialog import ExcelImportDialog
+from template_data_binding_dialog import TemplateDataBindingDialog
 
 
 class LogSignalBridge(QObject):
@@ -60,6 +68,8 @@ class MainWindow(QMainWindow):
     _data_tables = None
     _current_fields = None  # список (field_name, display_name) для строк таблицы
     _load_excel_btn = None
+    _record_combobox = None
+    _record_choice_widget = None  # виджет «Запись из набора данных», показывать только при linked_data_table
 
     def __init__(self, ui_file_name: str = "ui/main_window.ui", ui_loader=None):
         super().__init__()
@@ -159,6 +169,13 @@ class MainWindow(QMainWindow):
         if self._load_excel_btn is not None:
             self._load_excel_btn.clicked.connect(self._on_load_from_excel)
 
+        self._record_combobox = self._find(QComboBox, "record_combobox")
+        self._record_choice_widget = self._find(QWidget, "record_choice_widget")
+        if self._record_choice_widget is not None:
+            self._record_choice_widget.setVisible(False)
+        if self._record_combobox is not None:
+            self._record_combobox.currentIndexChanged.connect(self._on_record_selected)
+
     def _setup_log_panel(self):
         """Скрываемая/раскрываемая панель лога снизу главного окна."""
         layout = self.window.layout()
@@ -254,7 +271,7 @@ class MainWindow(QMainWindow):
         super().changeEvent(event)
 
     def _setup_menu_settings(self):
-        """Добавить в меню бар пункт «Сервис» -> «Настройки»."""
+        """Добавить в меню бар «Сервис» (Настройки, Импорт в БД) и «Данные»."""
         menubar = self.menuBar()
         if menubar is None:
             return
@@ -262,6 +279,26 @@ class MainWindow(QMainWindow):
         act = QAction("Настройки…", self)
         act.triggered.connect(self._on_settings)
         menu_serv.addAction(act)
+        act_import = QAction("Импорт из Excel в БД…", self)
+        act_import.triggered.connect(self._on_import_excel_to_db)
+        menu_serv.addAction(act_import)
+        act_bind = QAction("Привязать шаблон к набору данных…", self)
+        act_bind.triggered.connect(self._on_bind_template_to_data)
+        menu_serv.addAction(act_bind)
+
+    def _on_import_excel_to_db(self):
+        """Открыть диалог импорта Excel в набор данных."""
+        dlg = ExcelImportDialog(self)
+        dlg.exec()
+
+    def _on_bind_template_to_data(self):
+        """Открыть диалог привязки шаблона к набору данных."""
+        template_id = self._tables_combobox.currentData() if self._tables_combobox else None
+        dlg = TemplateDataBindingDialog(self, initial_template_id=template_id)
+        dlg.exec()
+        # Обновить отображение выбора записи, если выбран тот же шаблон
+        if self._tables_combobox and self._tables_combobox.currentIndex() > 0:
+            self._on_template_changed(self._tables_combobox.currentIndex())
 
     def _on_settings(self):
         """Открыть модальное окно настроек."""
@@ -406,6 +443,7 @@ class MainWindow(QMainWindow):
                 self._data_tables.setRowCount(0)
             if self._load_excel_btn is not None:
                 self._load_excel_btn.setEnabled(False)
+            self._hide_record_choice()
             return
         if self._tables_combobox is None:
             return
@@ -416,6 +454,55 @@ class MainWindow(QMainWindow):
         self._fill_fields_table(template_id)
         if self._load_excel_btn is not None:
             self._load_excel_btn.setEnabled(True)
+        linked = get_template_linked_data_table(template_id)
+        if linked:
+            self._show_record_choice(linked.id)
+        else:
+            self._hide_record_choice()
+
+    def _hide_record_choice(self):
+        """Скрыть блок выбора записи и очистить комбобокс."""
+        if self._record_choice_widget is not None:
+            self._record_choice_widget.setVisible(False)
+        if self._record_combobox is not None:
+            self._record_combobox.blockSignals(True)
+            self._record_combobox.clear()
+            self._record_combobox.addItem(st.AUX.NOT_CHOOSED_ITEM, None)
+            self._record_combobox.blockSignals(False)
+
+    def _show_record_choice(self, data_table_id: int):
+        """Показать блок выбора записи и заполнить комбобокс записями набора данных."""
+        if self._record_choice_widget is None or self._record_combobox is None:
+            return
+        records = list_records(data_table_id)
+        self._record_combobox.blockSignals(True)
+        self._record_combobox.clear()
+        self._record_combobox.addItem(st.AUX.NOT_CHOOSED_ITEM, None)
+        for rec in records:
+            vals = get_record_values(rec.id)
+            # Краткая подпись: первые два значения или «Запись N»
+            parts = list(vals.values())[:2]
+            label = " | ".join(str(p) for p in parts if p) or f"Запись {rec.id}"
+            if len(label) > 50:
+                label = label[:47] + "..."
+            self._record_combobox.addItem(label, rec.id)
+        self._record_combobox.blockSignals(False)
+        self._record_choice_widget.setVisible(True)
+
+    def _on_record_selected(self, index: int):
+        """Подставить в таблицу полей значения выбранной записи из набора данных."""
+        if index <= 0 or self._record_combobox is None:
+            return
+        record_id = self._record_combobox.currentData()
+        if record_id is None:
+            return
+        try:
+            values = get_record_values(record_id)
+        except Exception as e:
+            py_logger.error("Record values: %s", e)
+            return
+        # Привести к формату имя_поля -> значение для _apply_values_to_table (ожидает ключи как в шаблоне)
+        self._apply_values_to_table(values)
 
     def _fill_fields_table(self, template_id: int):
         """Заполнить таблицу полей и виджетами ввода/выбора значения."""

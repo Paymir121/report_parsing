@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 from db.connection import Connection
-from db.models import DocumentTemplate, TemplateField
+from db.models import DataTable, DocumentTemplate, TemplateField
 from core.template_parser import extract_variables_from_docx, validate_template_syntax
 from logger import py_logger
 
@@ -20,6 +20,26 @@ def get_template_by_id(template_id: int) -> Optional[DocumentTemplate]:
     """Вернуть шаблон по id или None."""
     conn = Connection()
     return conn.session.get(DocumentTemplate, template_id)
+
+
+def get_template_linked_data_table(template_id: int) -> Optional[DataTable]:
+    """Вернуть привязанный набор данных для шаблона или None."""
+    conn = Connection()
+    template = conn.session.get(DocumentTemplate, template_id)
+    if not template or not template.linked_data_table_id:
+        return None
+    return conn.session.get(DataTable, template.linked_data_table_id)
+
+
+def set_template_linked_data_table(template_id: int, data_table_id: Optional[int]) -> bool:
+    """Установить или сбросить привязку шаблона к набору данных. Возвращает True при успехе."""
+    conn = Connection()
+    template = conn.session.get(DocumentTemplate, template_id)
+    if not template:
+        return False
+    template.linked_data_table_id = data_table_id
+    conn.session.commit()
+    return True
 
 
 def get_template_fields(template_id: int) -> List[TemplateField]:

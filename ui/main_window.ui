@@ -97,6 +97,45 @@
       </property>
       <layout class="QVBoxLayout" name="groupBoxLayout">
        <item>
+        <widget class="QWidget" name="record_choice_widget" native="true">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <layout class="QHBoxLayout" name="recordChoiceLayout">
+          <item>
+           <widget class="QLabel" name="label_record">
+            <property name="text">
+             <string>Запись из набора данных:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="record_combobox">
+            <property name="minimumWidth">
+             <number>220</number>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="recordSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QTableWidget" name="data_tables">
          <property name="columnCount">
           <number>2</number>
