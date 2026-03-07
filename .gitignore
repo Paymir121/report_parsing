@@ -11,7 +11,8 @@ my_working/
 
 # Distribution / packaging
 .Python
-build/
+build/dist/
+build/work/
 develop-eggs/
 dist/
 dist
