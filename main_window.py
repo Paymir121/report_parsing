@@ -589,10 +589,25 @@ class MainWindow(QMainWindow):
         self._fields_tab_widget = QTabWidget(parent)
         simple_tab = QWidget()
         tab_layout = QVBoxLayout(simple_tab)
-        tab_layout.setContentsMargins(0, 0, 0, 0)
+        tab_layout.setContentsMargins(4, 4, 4, 4)
+        # Панель кнопок во вкладке «Поля» — как во вкладках циклов
+        simple_btn_bar = QWidget()
+        simple_btn_layout = QHBoxLayout(simple_btn_bar)
+        simple_btn_layout.setContentsMargins(0, 0, 0, 0)
+        excel_simple_btn = QPushButton("Вставить из Excel…")
+        excel_simple_btn.setMinimumWidth(160)
+        excel_simple_btn.setEnabled(False)
+        excel_simple_btn.clicked.connect(self._on_load_from_excel)
+        simple_btn_layout.addWidget(excel_simple_btn)
+        simple_btn_layout.addStretch()
+        tab_layout.addWidget(simple_btn_bar)
         tab_layout.addWidget(self._data_tables)
         self._fields_tab_widget.addTab(simple_tab, "Поля")
         layout.insertWidget(idx, self._fields_tab_widget)
+        # Кнопка из тулбара больше не нужна — вся логика у кнопки во вкладке
+        if self._load_excel_btn is not None:
+            self._load_excel_btn.hide()
+        self._load_excel_btn = excel_simple_btn
 
     def _rebuild_loop_tabs(self, template_id):
         if not hasattr(self, "_fields_tab_widget"):
