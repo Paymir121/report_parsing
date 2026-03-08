@@ -9,6 +9,7 @@ from db.models import create_all_tables
 from logger import py_logger
 from main_window import MainWindow
 import settings as st
+from settings_dialog import apply_log_level_from_settings
 
 
 def run():
@@ -17,6 +18,7 @@ def run():
     QCoreApplication.setApplicationName("WordTemplates")
     QCoreApplication.setOrganizationName("ReportParsing")
     st.load_from_qsettings()
+    apply_log_level_from_settings()
     try:
         conn = Connection()
         create_all_tables(conn.engine)

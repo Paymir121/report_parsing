@@ -57,12 +57,7 @@ class Logger(logging.Logger):
 
         self.log_file = log_file
 
-        # self.setLevel(logging.NOTSET)
-        # self.setLevel(logging.INFO)
-        # :: !!!!!!!!!!!!!!!!!!!!!!!
-        '''
         self.setLevel(logging.DEBUG)
-        '''
 
         # Форматтер для файла (без цветов)
         format_string: str = "%(asctime)s - %(levelname)s - %(message)s"
@@ -76,16 +71,6 @@ class Logger(logging.Logger):
 
         self._clear_log_file()
 
-        # :: ОБРАБОТЧИК ДЛЯ ФАЙЛА
-        # logging.basicConfig(
-        #     filename="logger_2.log",
-        #     level=logging.DEBUG,
-        #     format=format_string,
-        #     filemode='a',
-        #     encoding='utf8',
-        # )
-        # logger = logging.getLogger('SomeLogger')
-        # --------------------------------------------------------
         file_handler = logging.FileHandler(self.log_file, encoding='utf-8')
         file_handler.setFormatter(file_formatter)
         self.addHandler(file_handler)
@@ -96,7 +81,7 @@ class Logger(logging.Logger):
             "|%(levelname)-8s|%(asctime)s|: %(message)s",
         )
         # TODO Добавить в настройки
-        # console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.INFO)
 
         console_handler.setFormatter(console_formatter)
         self.addHandler(console_handler)

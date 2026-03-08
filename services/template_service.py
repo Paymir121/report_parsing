@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
 from db.connection import Connection
-from db.models import DataTable, DocumentTemplate, TemplateField
-from core.template_parser import extract_variables_from_docx, validate_template_syntax
+from db.models import DataTable, DocumentTemplate, TemplateField, TemplateLoopBlock, TemplateLoopField
+from core.template_parser import extract_variables_from_docx, extract_template_structure, validate_template_syntax
 from logger import py_logger
 
 
@@ -49,6 +49,16 @@ def get_template_fields(template_id: int) -> List[TemplateField]:
         conn.session.query(TemplateField)
         .filter_by(template_id=template_id, is_active=True)
         .order_by(TemplateField.sort_order)
+        .all()
+    )
+
+
+def get_template_loop_blocks(template_id: int) -> List[TemplateLoopBlock]:
+    conn = Connection()
+    return (
+        conn.session.query(TemplateLoopBlock)
+        .filter_by(template_id=template_id)
+        .order_by(TemplateLoopBlock.sort_order)
         .all()
     )
 
@@ -101,16 +111,32 @@ def register_template(
     conn.session.flush()
 
     if sync_fields_from_file:
-        variable_names, parse_errors = extract_variables_from_docx(path)
-        errors.extend(parse_errors)
-        for i, var in enumerate(variable_names):
-            f = TemplateField(
+        structure = extract_template_structure(path)
+        errors.extend(structure.errors)
+        for i, var in enumerate(structure.simple_fields):
+            conn.session.add(TemplateField(
                 template_id=template.id,
                 field_name=var,
                 display_name=var.replace("_", " ").title(),
                 sort_order=i,
+            ))
+        for b_idx, lb in enumerate(structure.loop_blocks):
+            block = TemplateLoopBlock(
+                template_id=template.id,
+                loop_var=lb.loop_var,
+                item_var=lb.item_var,
+                label=lb.loop_var,
+                sort_order=b_idx,
             )
-            conn.session.add(f)
+            conn.session.add(block)
+            conn.session.flush()
+            for f_idx, field_name in enumerate(lb.fields):
+                conn.session.add(TemplateLoopField(
+                    loop_block_id=block.id,
+                    field_name=field_name,
+                    display_name=field_name.replace("_", " ").title(),
+                    sort_order=f_idx,
+                ))
     conn.session.commit()
     conn.session.refresh(template)
     py_logger.info("Registered template id=%s code=%s", template.id, code)

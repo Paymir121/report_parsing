@@ -43,6 +43,12 @@ class DocumentTemplate(Base):
     fields = relationship("TemplateField", back_populates="template", cascade="all, delete-orphan", order_by="TemplateField.sort_order")
     generation_history = relationship("GenerationHistory", back_populates="template", passive_deletes=True)
     linked_data_table = relationship("DataTable", back_populates="templates_linked", foreign_keys=[linked_data_table_id])
+    loop_blocks = relationship(
+        "TemplateLoopBlock",
+        back_populates="template",
+        cascade="all, delete-orphan",
+        order_by="TemplateLoopBlock.sort_order",
+    )
 
 
 class TemplateVersion(Base):
@@ -112,6 +118,49 @@ class GenerationHistory(Base):
     template = relationship("DocumentTemplate", back_populates="generation_history")
 
 
+class TemplateLoopBlock(Base):
+    __tablename__ = "template_loop_blocks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    template_id = Column(
+        Integer,
+        ForeignKey("document_templates.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    loop_var = Column(String(255), nullable=False)
+    item_var = Column(String(255), nullable=False)
+    label = Column(String(255))
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    template = relationship("DocumentTemplate", back_populates="loop_blocks")
+    loop_fields = relationship(
+        "TemplateLoopField",
+        back_populates="loop_block",
+        cascade="all, delete-orphan",
+        order_by="TemplateLoopField.sort_order",
+    )
+
+    __table_args__ = (UniqueConstraint("template_id", "loop_var", name="uq_loop_block"),)
+
+
+class TemplateLoopField(Base):
+    __tablename__ = "template_loop_fields"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    loop_block_id = Column(
+        Integer,
+        ForeignKey("template_loop_blocks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    field_name = Column(String(255), nullable=False)
+    display_name = Column(String(255))
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    loop_block = relationship("TemplateLoopBlock", back_populates="loop_fields")
+
+    __table_args__ = (UniqueConstraint("loop_block_id", "field_name", name="uq_loop_field"),)
+
+
 # --- Наборы данных (таблицы/справочники) для импорта из Excel и ручного ввода ---
 
 
@@ -177,6 +226,7 @@ def create_all_tables(engine):
     """Создать все таблицы в БД."""
     Base.metadata.create_all(bind=engine)
     _ensure_linked_data_table_column(engine)
+    _ensure_loop_tables(engine)
 
 
 def _ensure_linked_data_table_column(engine):
@@ -195,3 +245,14 @@ def _ensure_linked_data_table_column(engine):
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE document_templates ADD COLUMN linked_data_table_id INTEGER"))
         conn.commit()
+
+
+def _ensure_loop_tables(engine):
+    from sqlalchemy import inspect
+
+    insp = inspect(engine)
+    existing = set(insp.get_table_names())
+    if "template_loop_blocks" not in existing:
+        TemplateLoopBlock.__table__.create(bind=engine)
+    if "template_loop_fields" not in existing:
+        TemplateLoopField.__table__.create(bind=engine)

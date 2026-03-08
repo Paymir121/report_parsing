@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -32,6 +33,7 @@ from logger import py_logger
 import settings as st
 from services.template_service import (
     get_template_linked_data_table,
+    get_template_loop_blocks,
     load_templates_list,
     register_template,
     get_template_fields,
@@ -70,6 +72,8 @@ class MainWindow(QMainWindow):
     _load_excel_btn = None
     _record_combobox = None
     _record_choice_widget = None  # виджет «Запись из набора данных», показывать только при linked_data_table
+    _loop_tab_widgets = None
+    _loop_blocks_meta = None
 
     def __init__(self, ui_file_name: str = "ui/main_window.ui", ui_loader=None):
         super().__init__()
@@ -77,6 +81,8 @@ class MainWindow(QMainWindow):
         self._data_tables = None
         self._current_fields = []
         self._load_excel_btn = None
+        self._loop_tab_widgets = {}
+        self._loop_blocks_meta = {}
         loader = ui_loader if ui_loader is not None else QUiLoader()
 
         ui_path = Path(ui_file_name)
@@ -175,6 +181,7 @@ class MainWindow(QMainWindow):
             self._record_choice_widget.setVisible(False)
         if self._record_combobox is not None:
             self._record_combobox.currentIndexChanged.connect(self._on_record_selected)
+        self._wrap_fields_in_tabs()
 
     def _setup_log_panel(self):
         """Скрываемая/раскрываемая панель лога снизу главного окна."""
@@ -340,7 +347,13 @@ class MainWindow(QMainWindow):
                 "В файле не найдено колонок «имя» и «значение» (или «name» и «value»).",
             )
             return
-        self._apply_values_to_table(data)
+        py_logger.info(
+            "---------- Вставка полей из Excel (простые поля) ---------- Файл: %s, прочитано пар имя/значение: %s",
+            path, len(data),
+        )
+        for k, v in data.items():
+            py_logger.info("  Excel поле «%s» = %r", k, v)
+        self._apply_values_to_table(data, source_label=f"Excel {path}")
         QMessageBox.information(
             self,
             "Загрузка из Excel",
@@ -379,11 +392,11 @@ class MainWindow(QMainWindow):
                 name_col = col
             elif h in ("значение", "value"):
                 value_col = col
-        has_header = name_col is not None and value_col is not None
+        # Требуем обе колонки: «имя» и «значение». Иначе файл для другого формата (например цикл).
         if name_col is None or value_col is None:
-            name_col, value_col = 0, 1
+            return {}
         data = {}
-        for row in rows[1:] if has_header and len(rows) > 1 else rows:
+        for row in rows[1:] if len(rows) > 1 else []:
             if not row or name_col >= len(row):
                 continue
             name = self._cell_to_str(row[name_col]).strip()
@@ -393,7 +406,7 @@ class MainWindow(QMainWindow):
             data[name.upper()] = value
         return data
 
-    def _apply_values_to_table(self, data: dict):
+    def _apply_values_to_table(self, data: dict, source_label: str = "источник"):
         """
         Подставить в таблицу полей только те значения из data, для которых есть ключ
         (имя_поля -> значение). Поля, которых нет в источнике (другой Excel, запись),
@@ -401,6 +414,10 @@ class MainWindow(QMainWindow):
         """
         if self._data_tables is None or not self._current_fields:
             return
+        py_logger.info(
+            "Заполнение полей (применение значений): источник=%s, полей в данных: %s, ключи: %s",
+            source_label, len(data), list(data.keys()),
+        )
         data_upper = {k.upper(): v for k, v in data.items()}
         applied = 0
         for row in range(self._data_tables.rowCount()):
@@ -429,6 +446,11 @@ class MainWindow(QMainWindow):
             elif isinstance(w, QLineEdit):
                 w.setText(value)
                 applied += 1
+        py_logger.info(
+            "Заполнение полей: применено к ячейкам: %s из %s полей таблицы; значения: %s",
+            applied, len(self._current_fields),
+            {fn: data_upper.get(fn.upper(), data.get(fn, "")) for fn, _ in self._current_fields if fn.upper() in data_upper or fn in data},
+        )
 
     def _refresh_templates_combo(self):
         if self._tables_combobox is None:
@@ -449,6 +471,7 @@ class MainWindow(QMainWindow):
             if self._load_excel_btn is not None:
                 self._load_excel_btn.setEnabled(False)
             self._hide_record_choice()
+            self._rebuild_loop_tabs(None)
             return
         if self._tables_combobox is None:
             return
@@ -457,6 +480,7 @@ class MainWindow(QMainWindow):
             return
         py_logger.info("Template selected: id=%s", template_id)
         self._fill_fields_table(template_id)
+        self._rebuild_loop_tabs(template_id)
         if self._load_excel_btn is not None:
             self._load_excel_btn.setEnabled(True)
         linked = get_template_linked_data_table(template_id)
@@ -506,8 +530,14 @@ class MainWindow(QMainWindow):
         except Exception as e:
             py_logger.error("Record values: %s", e)
             return
+        py_logger.info(
+            "---------- Заполнение полей из записи ---------- record_id=%s, полей в записи: %s",
+            record_id, len(values),
+        )
+        for k, v in values.items():
+            py_logger.info("  Запись поле «%s» = %r", k, v)
         # Привести к формату имя_поля -> значение для _apply_values_to_table (ожидает ключи как в шаблоне)
-        self._apply_values_to_table(values)
+        self._apply_values_to_table(values, source_label=f"запись id={record_id}")
 
     def _fill_fields_table(self, template_id: int):
         """Заполнить таблицу полей и виджетами ввода/выбора значения."""
@@ -538,6 +568,163 @@ class MainWindow(QMainWindow):
                 if f.default_value:
                     line.setPlaceholderText(f.default_value)
                 self._data_tables.setCellWidget(row, 1, line)
+        py_logger.info(
+            "---------- Заполнение полей (таблица) ---------- шаблон id=%s, отображено полей: %s, имена: %s",
+            template_id, len(fields), [f.field_name for f in fields],
+        )
+
+    def _wrap_fields_in_tabs(self):
+        if self._data_tables is None:
+            return
+        parent = self._data_tables.parent()
+        if parent is None:
+            return
+        layout = parent.layout()
+        if layout is None:
+            return
+        idx = layout.indexOf(self._data_tables)
+        if idx < 0:
+            return
+        layout.removeWidget(self._data_tables)
+        self._fields_tab_widget = QTabWidget(parent)
+        simple_tab = QWidget()
+        tab_layout = QVBoxLayout(simple_tab)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+        tab_layout.addWidget(self._data_tables)
+        self._fields_tab_widget.addTab(simple_tab, "Поля")
+        layout.insertWidget(idx, self._fields_tab_widget)
+
+    def _rebuild_loop_tabs(self, template_id):
+        if not hasattr(self, "_fields_tab_widget"):
+            return
+        while self._fields_tab_widget.count() > 1:
+            self._fields_tab_widget.removeTab(1)
+        self._loop_tab_widgets.clear()
+        self._loop_blocks_meta.clear()
+        if template_id is None:
+            return
+        try:
+            blocks = get_template_loop_blocks(template_id)
+        except Exception as e:
+            py_logger.error("Loop blocks load: %s", e)
+            return
+        for block in blocks:
+            self._loop_blocks_meta[block.id] = block
+            tab_widget, tbl = self._create_loop_tab_widget(block)
+            self._fields_tab_widget.addTab(tab_widget, block.label or block.loop_var)
+            self._loop_tab_widgets[block.id] = tbl
+
+    def _create_loop_tab_widget(self, block):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(4, 4, 4, 4)
+        btn_bar = QWidget()
+        btn_layout = QHBoxLayout(btn_bar)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        add_btn = QPushButton("+ Строка")
+        del_btn = QPushButton("− Строка")
+        excel_btn = QPushButton("Загрузить из Excel…")
+        btn_layout.addWidget(add_btn)
+        btn_layout.addWidget(del_btn)
+        btn_layout.addWidget(excel_btn)
+        btn_layout.addStretch()
+        display_names = [lf.display_name or lf.field_name for lf in block.loop_fields]
+        tbl = QTableWidget(0, len(display_names))
+        tbl.setHorizontalHeaderLabels(display_names)
+        tbl.horizontalHeader().setStretchLastSection(True)
+        col_count = len(display_names)
+        add_btn.clicked.connect(lambda: self._loop_add_row(tbl, col_count))
+        del_btn.clicked.connect(lambda: self._loop_del_row(tbl))
+        excel_btn.clicked.connect(
+            lambda checked=False, b=block, t=tbl: self._loop_load_excel(b, t)
+        )
+        layout.addWidget(btn_bar)
+        layout.addWidget(tbl)
+        return tab, tbl
+
+    def _loop_add_row(self, tbl: QTableWidget, col_count: int):
+        r = tbl.rowCount()
+        tbl.insertRow(r)
+        for c in range(col_count):
+            tbl.setItem(r, c, QTableWidgetItem(""))
+
+    def _loop_del_row(self, tbl: QTableWidget):
+        row = tbl.currentRow()
+        if row < 0:
+            row = tbl.rowCount() - 1
+        if row >= 0:
+            tbl.removeRow(row)
+
+    def _loop_load_excel(self, block, tbl: QTableWidget):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            f"Excel для цикла «{block.label or block.loop_var}»",
+            "",
+            "Excel (*.xlsx *.xls);;All (*.*)",
+        )
+        if not path:
+            return
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(path, data_only=True)
+            ws = wb.active
+            if ws is None:
+                QMessageBox.warning(self, "Загрузка Excel", "Файл пуст.")
+                return
+            raw_rows = [
+                [self._cell_to_str(c) for c in row]
+                for row in ws.iter_rows(values_only=True)
+            ]
+            if not raw_rows:
+                QMessageBox.warning(self, "Загрузка Excel", "Файл пуст.")
+                return
+
+            def _norm(h: str) -> str:
+                h = h.strip()
+                if h.startswith("{{") and h.endswith("}}"):
+                    h = h[2:-2].strip()
+                return h.upper()
+
+            norm_headers = [_norm(h) for h in raw_rows[0]]
+            block_fields = [lf.field_name for lf in block.loop_fields]
+            block_fields_upper = [f.upper() for f in block_fields]
+            col_map = {
+                xi: block_fields_upper.index(nh)
+                for xi, nh in enumerate(norm_headers)
+                if nh in block_fields_upper
+            }
+            py_logger.info(
+                "---------- Вставка полей из Excel (цикл) ---------- Цикл: %s, файл: %s",
+                block.loop_var, path,
+            )
+            py_logger.info(
+                "  Заголовки в файле: %s; поля цикла: %s; сопоставлено колонок: %s",
+                raw_rows[0], block_fields, dict(col_map),
+            )
+            tbl.setRowCount(0)
+            for row_vals in raw_rows[1:]:
+                if all(self._cell_to_str(v) == "" for v in row_vals):
+                    continue
+                r = tbl.rowCount()
+                tbl.insertRow(r)
+                for xi, ti in col_map.items():
+                    val = self._cell_to_str(row_vals[xi]) if xi < len(row_vals) else ""
+                    tbl.setItem(r, ti, QTableWidgetItem(val))
+            py_logger.info("  Загружено строк в таблицу цикла: %s", tbl.rowCount())
+            for r in range(min(5, tbl.rowCount())):
+                row_data = {
+                    block_fields[c]: (tbl.item(r, c).text() if tbl.item(r, c) else "")
+                    for c in range(len(block_fields))
+                }
+                py_logger.info("  Строка %s: %s", r + 1, row_data)
+            if tbl.rowCount() > 5:
+                py_logger.info("  ... и ещё %s строк", tbl.rowCount() - 5)
+            QMessageBox.information(
+                self, "Загрузка Excel", f"Загружено строк: {tbl.rowCount()}."
+            )
+        except Exception as e:
+            py_logger.error("Loop Excel load: %s", e)
+            QMessageBox.critical(self, "Ошибка", f"Не удалось прочитать файл:\n{e}")
 
     def _on_add_template(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -590,6 +777,10 @@ class MainWindow(QMainWindow):
         if not path.lower().endswith(".docx"):
             path = path + ".docx"
         context = self._collect_context_from_table()
+        py_logger.info(
+            "Generate: template_id=%s, path=%s, context_keys=%s",
+            template_id, path, list(context.keys()),
+        )
         try:
             generate_document(template_id, context, path)
             QMessageBox.information(
@@ -608,20 +799,47 @@ class MainWindow(QMainWindow):
     def _collect_context_from_table(self) -> dict:
         """Собрать из таблицы полей словарь field_name -> value для подстановки в шаблон."""
         context = {}
-        if self._data_tables is None or not self._current_fields:
-            return context
-        for row in range(self._data_tables.rowCount()):
-            if row >= len(self._current_fields):
-                break
-            field_name, _ = self._current_fields[row]
-            w = self._data_tables.cellWidget(row, 1)
-            val = ""
-            if w is not None:
-                if isinstance(w, QComboBox):
-                    v = w.currentData()
-                    if v is not None:
-                        val = v if isinstance(v, str) else str(v)
-                elif isinstance(w, QLineEdit):
-                    val = w.text().strip()
-            context[field_name] = val
+        if self._data_tables is not None and self._current_fields:
+            for row in range(self._data_tables.rowCount()):
+                if row >= len(self._current_fields):
+                    break
+                field_name, _ = self._current_fields[row]
+                w = self._data_tables.cellWidget(row, 1)
+                val = ""
+                if w is not None:
+                    if isinstance(w, QComboBox):
+                        v = w.currentData()
+                        if v is not None:
+                            val = v if isinstance(v, str) else str(v)
+                    elif isinstance(w, QLineEdit):
+                        val = w.text().strip()
+                context[field_name] = val
+                py_logger.debug(
+                    "Context field: row=%s, field_name=%s, widget=%s, value=%r",
+                    row, field_name, type(w).__name__ if w else None, val,
+                )
+        for block_id, tbl in self._loop_tab_widgets.items():
+            block = self._loop_blocks_meta.get(block_id)
+            if block is None:
+                continue
+            fields = [lf.field_name for lf in block.loop_fields]
+            rows = []
+            for r in range(tbl.rowCount()):
+                row_dict = {
+                    field: (tbl.item(r, c).text() if tbl.item(r, c) else "")
+                    for c, field in enumerate(fields)
+                }
+                if any(v.strip() for v in row_dict.values()):
+                    rows.append(row_dict)
+            context[block.loop_var] = rows
+            py_logger.debug(
+                "Context loop: loop_var=%s, rows_count=%s, fields=%s, sample_row=%s",
+                block.loop_var, len(rows), fields, rows[0] if rows else None,
+            )
+        py_logger.info(
+            "Context collected: %s simple keys, %s loop keys; simple_values=%s",
+            len([k for k in context if not isinstance(context.get(k), list)]),
+            len([k for k in context if isinstance(context.get(k), list)]),
+            {k: v for k, v in context.items() if not isinstance(v, list)},
+        )
         return context

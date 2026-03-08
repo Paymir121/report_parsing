@@ -2,6 +2,7 @@
 Извлечение переменных Jinja2 из Word-шаблона .docx через AST.
 Без выполнения шаблона; только парсинг и список имён переменных.
 """
+from dataclasses import dataclass, field as dc_field
 from pathlib import Path
 from typing import List, Set, Tuple
 
@@ -9,8 +10,23 @@ from docx import Document
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 from jinja2 import Environment, meta
+import jinja2.nodes as j2nodes
 
 from logger import py_logger
+
+
+@dataclass
+class LoopBlock:
+    loop_var: str
+    item_var: str
+    fields: List[str]
+
+
+@dataclass
+class TemplateStructure:
+    simple_fields: List[str]
+    loop_blocks: List[LoopBlock]
+    errors: List[str] = dc_field(default_factory=list)
 
 
 def _collect_text_from_docx(doc: Document) -> str:
@@ -85,3 +101,69 @@ def validate_template_syntax(path_or_stream) -> Tuple[bool, List[str]]:
     """
     names, errors = extract_variables_from_docx(path_or_stream)
     return len(errors) == 0, errors
+
+
+def _iter_ast_nodes(node):
+    yield node
+    for child in node.iter_child_nodes():
+        yield from _iter_ast_nodes(child)
+
+
+def _collect_loop_fields(body_nodes: list, item_var: str) -> List[str]:
+    seen: dict = {}
+    for top in body_nodes:
+        for node in _iter_ast_nodes(top):
+            if (
+                isinstance(node, j2nodes.Getattr)
+                and isinstance(node.node, j2nodes.Name)
+                and node.node.name == item_var
+            ):
+                seen[node.attr] = True
+    return list(seen.keys())
+
+
+def extract_template_structure(path_or_stream) -> "TemplateStructure":
+    errors: List[str] = []
+    try:
+        if hasattr(path_or_stream, "read"):
+            doc = Document(path_or_stream)
+        else:
+            doc = Document(str(path_or_stream))
+        template_text = _collect_text_from_docx(doc)
+    except Exception as e:
+        return TemplateStructure([], [], [str(e)])
+
+    env = Environment()
+    try:
+        ast = env.parse(template_text)
+    except Exception as e:
+        return TemplateStructure([], [], [f"Синтаксическая ошибка Jinja2: {e}"])
+
+    loop_blocks: List[LoopBlock] = []
+    loop_iter_vars: Set[str] = set()
+
+    for node in ast.body:
+        if not isinstance(node, j2nodes.For):
+            continue
+        if not isinstance(node.iter, j2nodes.Name):
+            errors.append(
+                f"Цикл со сложным итератором не поддерживается "
+                f"(строка {getattr(node, 'lineno', '?')}), блок пропущен."
+            )
+            continue
+        if not isinstance(node.target, j2nodes.Name):
+            errors.append(
+                f"Цикл с деструктуризацией не поддерживается "
+                f"(строка {getattr(node, 'lineno', '?')}), блок пропущен."
+            )
+            continue
+        loop_var = node.iter.name
+        item_var = node.target.name
+        fields = _collect_loop_fields(node.body, item_var)
+        loop_blocks.append(LoopBlock(loop_var=loop_var, item_var=item_var, fields=fields))
+        loop_iter_vars.add(loop_var)
+
+    all_vars = meta.find_undeclared_variables(ast)
+    simple_fields = sorted(all_vars - loop_iter_vars)
+
+    return TemplateStructure(simple_fields=simple_fields, loop_blocks=loop_blocks, errors=errors)

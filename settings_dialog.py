@@ -49,12 +49,20 @@ class SettingsDialog(QDialog):
 
         self._load_values()
 
+    LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+
     def _build_interface_tab(self) -> QWidget:
         w = QWidget()
         form = QFormLayout(w)
         self._log_expanded = QCheckBox("Раскрывать панель лога при запуске")
         self._log_expanded.setToolTip("Иначе панель лога будет свёрнута при старте")
         form.addRow(self._log_expanded)
+
+        self._log_level = QComboBox()
+        for lvl in self.LOG_LEVELS:
+            self._log_level.addItem(lvl, lvl)
+        self._log_level.setToolTip("Уровень детализации лога (DEBUG — максимум, CRITICAL — только критические ошибки)")
+        form.addRow("Уровень логирования:", self._log_level)
 
         self._templates_dir = QLineEdit()
         self._templates_dir.setPlaceholderText("Пусто — без начальной папки")
@@ -143,6 +151,12 @@ class SettingsDialog(QDialog):
         self._log_expanded.setChecked(
             s.value("Interface/LogExpandedAtStartup", False, type=bool)
         )
+        log_level = s.value("Interface/LogLevel", "INFO", type=str)
+        idx = self._log_level.findData(log_level)
+        if idx >= 0:
+            self._log_level.setCurrentIndex(idx)
+        else:
+            self._log_level.setCurrentIndex(self._log_level.findData("INFO"))
         self._templates_dir.setText(s.value("Interface/TemplatesDir", "", type=str))
 
         # БД
@@ -161,7 +175,10 @@ class SettingsDialog(QDialog):
     def _on_accept(self):
         s = _settings()
         s.setValue("Interface/LogExpandedAtStartup", self._log_expanded.isChecked())
+        log_level = self._log_level.currentData() or "INFO"
+        s.setValue("Interface/LogLevel", log_level)
         s.setValue("Interface/TemplatesDir", self._templates_dir.text().strip())
+        _apply_log_level(log_level)
         s.setValue("Database/Driver", self._db_driver.currentData())
         s.setValue("Database/SqlitePath", self._sqlite_path.text().strip() or "word_templates.db")
         s.setValue("Database/PgHost", self._pg_host.text().strip() or "localhost")
@@ -176,6 +193,29 @@ class SettingsDialog(QDialog):
 def get_settings_interface_log_expanded() -> bool:
     """Читает из QSettings: раскрывать ли панель лога при запуске."""
     return QSettings().value("Interface/LogExpandedAtStartup", False, type=bool)
+
+
+def get_settings_interface_log_level() -> str:
+    """Читает из QSettings уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL)."""
+    return QSettings().value("Interface/LogLevel", "INFO", type=str) or "INFO"
+
+
+def _apply_log_level(level: str) -> None:
+    """Применить уровень логирования к глобальному логгеру (вызов после сохранения настроек)."""
+    try:
+        from logger import py_logger
+        if hasattr(py_logger, "set_lvl_log"):
+            py_logger.set_lvl_log(level)
+    except Exception:
+        pass
+
+
+def apply_log_level_from_settings() -> None:
+    """Прочитать уровень логирования из QSettings и применить при загрузке приложения."""
+    level = get_settings_interface_log_level()
+    if level not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+        level = "INFO"
+    _apply_log_level(level)
 
 
 def get_settings_interface_templates_dir() -> str:
