@@ -40,11 +40,14 @@
 | **data_table_columns** | Колонки набора данных: field_name, display_name, sort_order. Определяют структуру записей и маппинг с Excel. |
 | **data_records** | Запись в наборе данных (одна строка: один клиент, один договор и т.д.). |
 | **data_record_values** | Значения полей записи: data_record_id, field_name, value_text. Пары (record, field_name) уникальны. |
+| **template_loop_blocks** | Циклы шаблона: template_id, loop_var, item_var, label, sort_order. |
+| **template_loop_fields** | Поля цикла: loop_block_id, field_name, display_name, sort_order. |
 | **generation_history** | История генераций: template_id, output_path, context_snapshot, дата, created_by. |
 
 Связи:
 
 - Шаблон → поля (cascade delete); поле → field_values (cascade delete).
+- Шаблон → **template_loop_blocks** (cascade delete); блок → **template_loop_fields** (cascade delete).
 - Шаблон → опционально одна **data_table** (linked_data_table_id, SET NULL при удалении таблицы).
 - data_table → data_table_columns (cascade delete); data_table → data_records (cascade delete).
 - data_record → data_record_values (cascade delete).
@@ -91,53 +94,71 @@
 
 ---
 
-## 3. Структура каталогов (целевая)
+## 3. Структура каталогов (текущая)
 
 ```
 report_parsing/
 ├── main.py
 ├── main_window.py
 ├── settings.py
-├── settings_dialog.py
-├── excel_import_dialog.py      # диалог импорта Excel в БД
-├── template_data_binding_dialog.py  # привязка шаблона к набору данных
-├── abstract_dialog.py           # при необходимости
+├── settings_dialog.py          # Настройки: интерфейс (лог, каталог, уровень логирования), БД
+├── excel_import_dialog.py      # Импорт Excel в БД (наборы данных)
+├── template_data_binding_dialog.py  # Привязка шаблона к набору данных
+├── abstract_dialog.py
 ├── db/
 │   ├── connection.py
-│   └── models.py               # DataTable, DataTableColumn, DataRecord, DataRecordValue; linked_data_table_id в DocumentTemplate
+│   └── models.py               # Шаблоны, поля, field_values, template_loop_blocks, template_loop_fields,
+│                               # data_tables, data_records, generation_history
 ├── core/
-│   ├── template_parser.py
-│   └── document_generator.py
+│   ├── template_parser.py      # Извлечение переменных и циклов Jinja2 из .docx
+│   └── document_generator.py  # Рендер docxtpl, логирование контекста и неподставленных переменных
 ├── services/
-│   ├── template_service.py     # привязка к data_table, get_template_linked_data_table, set_template_linked_data_table
+│   ├── template_service.py     # Регистрация шаблона, привязка к data_table, loop_blocks
 │   ├── field_value_service.py
-│   ├── generation_service.py
-│   ├── data_table_service.py   # CRUD наборов данных и записей
-│   └── excel_import_service.py  # импорт .xlsx в data_tables
+│   ├── generation_service.py   # generate_document, логирование шаблона и контекста
+│   ├── data_table_service.py
+│   └── excel_import_service.py
 ├── ui/
-│   ├── main_window.ui          # + record_choice_widget, record_combobox
-│   └── ...
-├── logger/
+│   └── main_window.ui
+├── logger/                     # py_logger, уровень из QSettings
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── IMPLEMENTATION_PLAN.md
 │   └── ИНСТРУКЦИЯ.md
 └── tests/
+    ├── run_all.py              # init_db + create_sample_template + create_sample_excel
+    ├── init_db.py              # --clear: полная очистка БД
+    ├── create_sample_template.py
+    ├── create_sample_excel.py
+    └── fixtures/               # .docx и .xlsx для простых полей и циклов
 ```
+
+## 3.1. Циклы в шаблонах (docxtpl)
+
+- В шаблоне поддерживаются циклы Jinja2: `{% for item in items %} … {% endfor %}`.
+- **Ограничение docxtpl**: весь цикл (for + тело + endfor) должен находиться в **одном параграфе** (одном run). Иначе подстановка не срабатывает.
+- При регистрации шаблона из .docx извлекаются: простые переменные и блоки циклов (loop_var, item_var, поля цикла). Для каждого цикла создаётся вкладка в UI с таблицей строк и кнопкой «Загрузить из Excel…».
+- Контекст генерации: простые поля — словарь `field_name → value`; циклы — `loop_var → [{"FIELD": "value", …}, …]`.
 
 ---
 
 ## 4. Поток данных (обновлённый)
 
-1. **Старт**: создание таблиц, загрузка списка шаблонов.
-2. **Выбор шаблона**: загрузка полей, заполнение таблицы (Поле / Значение). Если у шаблона есть linked_data_table — показать выбор записи из этого набора; при выборе записи подставить в таблицу полей значения из data_record_values.
-3. **Источники значений**: (а) ручное редактирование в таблице полей; (б) «Вставить из Excel» — по-прежнему может подставлять в таблицу из файла (legacy); (в) **«Импорт в БД»** — загрузка .xlsx в выбранный набор данных (data_tables); (г) **«Выбрать запись»** — подстановка из выбранной записи БД.
-4. **Генерация**: контекст собирается из таблицы полей → `generate_document(template_id, context, output_path)` → рендер docxtpl, запись в generation_history.
+1. **Старт**: создание таблиц, загрузка списка шаблонов, применение уровня логирования из QSettings.
+2. **Выбор шаблона**: загрузка полей и блоков циклов. Вкладки: «Поля» (таблица полей + кнопка «Вставить из Excel…») и по одной вкладке на цикл (таблица строк, «+ Строка», «− Строка», «Загрузить из Excel…»). Если у шаблона есть linked_data_table — показ выбора записи; при выборе записи подстановка в таблицу полей из data_record_values.
+3. **Источники значений**: (а) ручной ввод в таблице полей и в таблицах циклов; (б) **«Вставить из Excel»** во вкладке «Поля» — файл с колонками «имя» и «значение» (обязательные заголовки); (в) в каждой вкладке цикла — «Загрузить из Excel…» (заголовки = имена полей цикла); (г) **Сервис → Импорт из Excel в БД** — загрузка записей в набор данных; (д) выбор записи из набора данных — подстановка в таблицу полей.
+4. **Генерация**: контекст собирается из таблицы полей и таблиц циклов (`_collect_context_from_table`) → `generate_document(template_id, context, output_path)` → рендер docxtpl, запись в generation_history. Подробное логирование: какой шаблон читается, куда сохраняется, какие поля/циклы переданы и подставлены.
 
 ---
 
 ## 5. Зависимости ключевых модулей
 
-- **main** — без изменений.
-- **main_window** — + services.data_table_service, services.excel_import_service; при выборе шаблона запрашивать linked_data_table и записи; кнопки/диалоги: управление наборами данных, импорт Excel, выбор записи.
-- **services** — data_table_service использует db.models (DataTable, DataRecord, …); excel_import_service использует data_table_service и openpyxl; template_service — при необходимости отдаёт linked_data_table_id; generation_service без изменений (принимает context dict).
+- **main** — запуск приложения, load_from_qsettings, apply_log_level_from_settings, создание MainWindow.
+- **main_window** — таблица полей и вкладки циклов (QTabWidget), «Вставить из Excel» во вкладке «Поля», сбор контекста (простые поля + списки строк по loop_var), логирование заполнения и вставки из Excel; диалоги: настройки, импорт Excel в БД, привязка шаблона к набору данных.
+- **services** — template_service (регистрация, loop_blocks, linked_data_table); generation_service (get_template_content, render_docx, логирование); data_table_service; excel_import_service.
+- **settings_dialog** — QSettings: Interface/LogExpandedAtStartup, Interface/TemplatesDir, **Interface/LogLevel** (DEBUG/INFO/WARNING/ERROR/CRITICAL), Database/*. При сохранении применяется уровень к py_logger (set_lvl_log).
+
+## 6. Логирование
+
+- Уровень логгера задаётся в **Настройки → Интерфейс → Уровень логирования** и сохраняется в QSettings (Interface/LogLevel). При старте приложения уровень применяется к py_logger; при сохранении настроек — сразу.
+- Логи: заполнение полей (таблица при выборе шаблона), вставка из Excel (простые поля и циклы), применение значений к таблице, генерация (шаблон, контекст, результат, неподставленные переменные docxtpl). Файл лога — `logger.log` в корне проекта; панель лога в главном окне (кнопка «Лог ▼»).
