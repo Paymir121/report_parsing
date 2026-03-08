@@ -297,7 +297,7 @@ class NuitkaBuilder:
 
 
 def _write_pyinstaller_spec(icon_path: str = None):
-    """Пишет main.spec в build/. icon — строка, путь к .ico рядом со spec (build/icon.ico), иначе PyInstaller может не встроить иконку в exe."""
+    """Пишет main.spec в build/. Пути в datas задаются относительно каталога .spec (build/), иначе PyInstaller ищет build/ui и падает."""
     spec_path = os.path.join(BUILD_DIR, "main.spec")
     main_py = os.path.join(PROJECT_ROOT, "main.py")
     main_rel = os.path.relpath(main_py, BUILD_DIR).replace("\\", "/")
@@ -305,10 +305,12 @@ def _write_pyinstaller_spec(icon_path: str = None):
     icon_ico_in_build = os.path.join(BUILD_DIR, "icon.ico")
     if os.path.isfile(icon_ico_in_build):
         icon_str = repr(os.path.normpath(icon_ico_in_build))
-    ui_rel = os.path.relpath(UI_DIR, PROJECT_ROOT).replace("\\", "/")
+    # Пути относительно каталога .spec (BUILD_DIR), чтобы PyInstaller находил ui/ в корне проекта
+    ui_rel = os.path.relpath(UI_DIR, BUILD_DIR).replace("\\", "/")
     datas_list = f"[({repr(ui_rel)}, 'ui')]"
-    if os.path.isdir(os.path.join(PROJECT_ROOT, "static")):
-        static_rel = os.path.relpath(os.path.join(PROJECT_ROOT, "static"), PROJECT_ROOT).replace("\\", "/")
+    static_dir = os.path.join(PROJECT_ROOT, "static")
+    if os.path.isdir(static_dir):
+        static_rel = os.path.relpath(static_dir, BUILD_DIR).replace("\\", "/")
         datas_list = f"[({repr(ui_rel)}, 'ui'), ({repr(static_rel)}, 'static')]"
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 # Сгенерировано build.py — icon задан строкой для корректной вставки в exe
